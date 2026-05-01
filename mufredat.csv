@@ -1,0 +1,121 @@
+Kodu ;Dersin Adý ;Name;T ;U;L;K;AKTS;Dönem;Grubu;Ön Koþul
+ATÝ101;Atatürk Ýlkeleri ve Ýnkýlap Tarihi I;Principles of Ataturk And History of Revolution I;2;0;0;2;2;1;Z;
+BÝL101;Bilgisayar Mühendisliðine Giriþ;Introduction To Computer Engineering;3;0;0;3;5;1;Z;
+BÝL103;Programlamaya Giriþ   I;Introduction To Programming I;2;0;2;3;5;1;Z;
+BÝL123;Ayrýk Matematik;Discrete Mathematics;3;1;0;4;5;1;Z;
+TBFÝZ121;Fizik 1;Physics-I;3;0;2;4;6;1;Z;
+TBMAT111;Matematik 1;Mathematics-I;2;2;0;3;5;1;Z;
+YD113;Yabancý Dil I;Foreign Language I;1;2;0;2;2;1;Z;
+ATÝ102;Atatürk Ýlkeleri ve Ýnkýlap Tarihi II;Principles of Ataturk And History of Revolution II;2;0;0;2;2;2;Z;
+BÝL104;Programlamaya Giriþ   II;Introduction To Programming II;2;0;2;3;5;2;Z;
+BÝL108;Elektrik Devreleri ve Elektronik;Electric Circuits And Electronics;3;0;2;4;5;2;Z;
+BÝL124;Olasýlýk ve Ýstatistiðe Giriþ;Introduction to Probability and Statistics;3;0;0;3;5;2;Z;TBFIZ121, TBFÝZ115
+TBFÝZ122;Fizik 2;Physics-II;3;0;2;4;6;2;Z;TBMAT111, TBMAT101
+TBMAT112;Matematik 2;Mathematics-II;2;2;0;3;5;2;Z;BIL103
+YD114;Yabancý Dil II;Foreign Language II;1;2;0;2;2;2;Z;
+BÝL235;Java   I (TS 1);Java-I (TE 1);2;1;0;3;4;3;BÝLSEÇ-1;BÝL104
+BÝL237;Ýleri Programlama (TS1);Advanced Programming (TE1);2;1;0;3;4;3;BÝLSEÇ-1;BÝL104
+BÝLSEÇ-1;TEKNÝK SEÇMELÝ DERS 1;TECHNICAL ELECTIVE COURSE 1;2;1;0;3;4;3;G;
+BÝL203;Veri Yapýlarý;Data Structures;3;0;0;3;5;3;Z;BÝL104
+BÝL215;Sayýsal Devreler ve Mantýksal Tasarým;Digital Design And Logic Circuits;3;0;2;4;5;3;Z;
+BÝL225;Doðrusal Cebir;Linear Algebra;3;1;0;4;4;3;Z;TBMAT112, TBMAT102
+BÝL227;Diferansiyel Denklemler;Differential Equations;3;1;0;4;4;3;Z;TBMAT112, TBMAT102
+ÝSG101;Ýþ Saðlýðý ve Güvenliði I;Occupational Health and Safety I;2;0;0;2;2;3;Z;
+TDÝ101;Türk Dili I;Turkish Language I;2;0;0;2;2;3;Z;
+YDÝ213;Ýleri Ýngilizce I;Advanced English I;2;2;0;3;4;3;Z;
+BÝL242; Java   II (TS2);Java-II (TE2);2;1;0;3;4;4;BÝLSEÇ-2;BÝL104
+BÝL244; Çizge Kuramý (TS2);Graph Theory (TE2);2;1;0;3;4;4;BÝLSEÇ-2;BÝL104
+BÝLSEÇ-2;TEKNÝK SEÇMELÝ DERS 2;TECHNICAL ELECTIVE COURSE 2;2;1;0;3;4;4;G;
+BÝL204;Algoritmalar;Algorithms;3;0;0;3;6;4;Z;BÝL203
+BÝL212;Nesneye Yönelik Programlama;Object Oriented Programming;2;2;0;3;6;4;Z;BÝL104
+BÝL214;Sayýsal Çözümleme;Numerical Analysis;3;1;0;4;6;4;Z;TBMAT112, TBMAT102
+ÝSG102;Ýþ Saðlýðý ve Güvenliði II;Occupational Health and Safety II;2;0;0;2;2;4;Z;
+TDÝ102;Türk Dili II;Turkish Language II;2;0;0;2;2;4;Z;
+YDÝ214;Ýleri Ýngilizce II;Advanced English II;2;2;0;3;4;4;Z;
+BÝL321;Web Teknolojileri (TS 4);Web Technologies (TE4);3;0;0;3;5;5;BÝLSEÇ-4;
+BÝL323;Bilgisayar Mühendisliðinde Matematiksel Teknikler (TS4);Mathematical Techniques in Computer Engineering (TE4);3;0;0;3;5;5;BÝLSEÇ-4;
+BÝL325;Sayýlar Teorisi ve Uygulamalarý (TS4);Number Theory And Applicatons (TE4);3;0;0;3;5;5;BÝLSEÇ-4;
+BÝL327;Mobil Programlama (TS 4);Mobile Programming (TE4);3;0;0;3;5;5;BÝLSEÇ-4;
+BÝL329;Karmaþýk Ýþlevler ve Dönüþümler (TS4);Complex Functions And Transformation Techniques (TE4);3;0;0;3;5;5;BÝLSEÇ-4;
+BÝL341;Yöneylem Araþtýrmasý (TS4);Operations Research (TE4);3;0;0;3;5;5;BÝLSEÇ-4;
+BÝL343;Sayýsal Denetim 1 (TS4);Digital Control-I (TE4);3;0;0;3;5;5;BÝLSEÇ-4;
+BÝL349;Bilimsel Hesaplama (TS4);Operations Research (TE4);3;0;0;3;5;5;BÝLSEÇ-4;
+BÝLSEÇ-4;Teknik Seçmeli ders 4;TECHNICAL ELECTIVE COURSE 4;3;0;0;3;5;5;G;
+SSD1;Sosyal Seçmeli Ders I;Social Elective Course I;2;0;0;2;2;5;G;
+BÝL305;Bilgisayar Mimarisi;Computer Architecture;3;0;0;3;6;5;Z;BÝL215
+BÝL309;Veritabaný Yönetim Sistemleri;Database Management Systems;3;0;0;3;6;5;Z;BÝL104
+BÝL313;Sistem Programlama;System Programming;2;1;0;3;6;5;Z;BÝL104
+MUH301;Giriþimcilik ve Yenilikçilik ;Entrepreneurship and Innovation;2;0;0;2;5;5;Z;
+BÝL342;Unix Sistem Yönetimi (TS5);Unix System Management (TE5);3;0;0;3;5;6;BÝLSEÇ-5;
+BÝL344;Ýleri SQL (TS5);Advanced Sql (TE5);3;0;0;3;5;6;BÝLSEÇ-5;
+BÝL346;Web Programlama (TS5);Web Programming (TE5);3;0;0;3;5;6;BÝLSEÇ-5;
+BÝL348;Bilgisayar Aritmetiði (TS5);Computer Arithmetic (TE5);3;0;0;3;5;6;BÝLSEÇ-5;
+BÝL362;Veri Ýletiþimi (TS5);Data Communication (TE5);3;0;0;3;5;6;BÝLSEÇ-5;
+BÝL364;Sayýsal Denetim 2 (TS5);Digital Control-II (TE5);3;0;0;3;5;6;BÝLSEÇ-5;
+BÝLSEÇ-5;Teknik Seçmeli Ders 5;TECHNICAL ELECTIVE COURSE 5;3;0;0;3;5;6;G;
+BÝL304;Ýþletim Sistemleri;Operating Systems;3;0;0;3;6;6;Z;BÝL313
+BÝL312;Özdevinirler Kuramý;Theory Of Automata;3;0;0;3;5;6;Z;
+BÝL314;Sinyaller ve Sistemler;Signals And Systems;3;0;0;3;5;6;Z;
+BÝL318;Mikroiþlemciler;Microprocessors;3;0;0;3;5;6;Z;BÝL215
+BÝL322;Mesleki Ýngilizce;Professional English;3;0;0;3;4;6;Z;
+BÝL392;Staj *;Summer Practice *;0;0;0;0;10;6;Z;
+BÝL423;Programlama Dilleri (TS 6);Programming Languages (TE6);3;0;0;3;6;7;BÝLSEÇ-6;
+BÝL431;Bilgi Güvenliði (TS 6);Information Security (TE6);3;0;0;3;6;7;BÝLSEÇ-6;
+BÝL433;Bilgisayar Grafiði (TS 6);Computer Graphics (TS 6);3;0;0;3;6;7;BÝLSEÇ-6;
+BÝL435;Hesapedilebilirlik Kuramý (TS 6);Computability Theory (TE6);3;0;0;3;6;7;BÝLSEÇ-6;
+BÝL437;Kombinatorik (TS 6);Combinatorics (TE6);3;0;0;3;6;7;BÝLSEÇ-6;
+BÝL439;Kriptografiye Giriþ (TS 6);Introduction To Cryptography (TE6);3;0;0;3;6;7;BÝLSEÇ-6;
+BÝL447;Oyun Programlama (TS 6);Game Programming;3;0;0;3;6;7;BÝLSEÇ-6;
+BÝL449;Mobil Aðlar (TS 6);Mobile Networks(TE6);3;0;0;3;6;7;BÝLSEÇ-6;
+BÝL451;Bilgisayar Aðlarýnda Özel Konular (TS 6);Custom Topics in Computer Networks (TE6);3;0;0;3;6;7;BÝLSEÇ-6;
+BÝL457;Finansal Matematik (TS 6);Financal Mathematics (TE6);3;0;0;3;6;7;BÝLSEÇ-6;
+BÝL463;Gömülü Sistemler Giriþ (TS 6);Mobile Networks(TE 6);3;0;0;3;6;7;BÝLSEÇ-6;
+BÝL467;Proje Yönetimi (TS 6);Project Management (TE 6);3;0;0;3;6;7;BÝLSEÇ-6;
+BÝL429;Makine Öðrenimine Giriþ (TS 7);Introduction To Machine Learning (TE7);3;0;0;3;6;7;BÝLSEÇ-7;
+BÝL441;Yapay Zeka (TS 7);Artificial Intelligence (TE7);3;0;0;3;6;7;BÝLSEÇ-7;
+BÝL443;Robotik (TS 7);Robotics (TE7);3;0;0;3;6;7;BÝLSEÇ-7;
+BÝL445;Bulanýk Mantýk (TS 7);Fuzzy Logic (TE7);3;0;0;3;6;7;BÝLSEÇ-7;
+BÝL453;Bilgisayar Müh. Özel Konular - I (TS 7);Special Topics in Computer Engineering-I (TE7);3;0;0;3;6;7;BÝLSEÇ-7;
+BÝL455;Ýnsan Bilgisayar Arayüzü (TS 7);Human - Computer Interface (TE7);3;0;0;3;6;7;BÝLSEÇ-7;
+BÝLSEÇ-6;TEKNÝK SEÇMELÝ DERS 6;TECHNICAL ELECTIVE COURSE 6;3;0;0;3;6;7;G;
+BÝLSEÇ-7;TEKNÝK SEÇMELÝ DERS 7;TECHNICAL ELECTIVE COURSE 7;3;0;0;3;6;7;G;
+LABSEÇ-I;SEÇMELÝ LAB. I;Technical Elective Lab-I;0;0;2;1;3;7;G;
+BÝL417;Görüntü Ýþleme Laboratuvarý (SL 1);Digital Image Processing Lab. (EL1);0;0;2;1;3;7;LABSEÇ-I;
+BÝL465;Bilgisayar Að Yönetimi Laboratuvarý (SL 1);Computer Networks Management Lab. (EL1);0;0;2;1;3;7;LABSEÇ-I;
+BÝL479;Veri Tabaný Yönetimi Laboratuvarý (SL1);Database Management Systems Lab. (EL1);0;0;2;1;3;7;LABSEÇ-I;
+BÝL481;Web Programlama Laboratuvarý (SL 1);Web Programming Lab. (EL1);0;0;2;1;3;7;LABSEÇ-I;
+BÝL483;Bilgisayar Mühendisliðinde Özel Konular Laboratuvarý (SL 1);Special Topics in Computer Engineering-I Lab. (EL1);0;0;2;1;3;7;LABSEÇ-I;
+BÝL401;Bilgisayar Aðlarý;Computer Networks;3;0;0;3;5;7;Z;
+BÝL407;Yazýlým Mühendisliði;Software Engineering;3;0;0;3;6;7;Z;
+BÝL409;Proje Tasarýmý;Project Design;2;2;0;3;4;7;Z;
+BÝL504;Bilgisayarlý Görüye Giriþ (TS8);Introduction To Computer Vision (TE8);2;2;0;3;6;8;BÝLSEÇ-8;
+BÝL506;Yazýlým Test Süreçleri (TS8);Software Test Processes (TE8);2;2;0;3;6;8;BÝLSEÇ-8;
+BÝL508;Coðrafi Bilgi Sistemleri (TS8);Geographic Information Systems (TE8);2;2;0;3;6;8;BÝLSEÇ-8;
+BÝL510;Programlamada Özel Konular (TS8);Special Topics in Programming (TE8);2;2;0;3;6;8;BÝLSEÇ-8;
+BÝL512;Prolog (TS8);Prolog (TE8);2;2;0;3;6;8;BÝLSEÇ-8;
+BÝL514;Yapay Sinir Aðlarý (TS8);Artificial Neural Networks (TE8);2;2;0;3;6;8;BÝLSEÇ-8;
+BÝL516;Alan Programlanabilir Kapý Dizileri (TS8);Field Programmable Gate Arrays (TE8);2;2;0;3;6;8;BÝLSEÇ-8;
+BÝL518;Derleyici Tasarýmý (TS8);Compiler Design (TE 8);2;2;0;3;6;8;BÝLSEÇ-8;
+BÝL520;Bilgi Teorisi (TS9);Information Theory (TE9);2;2;0;3;6;8;BÝLSEÇ-9;
+BÝL522;Kodlama Teorisi (TS9);Coding Theory (TE9);2;2;0;3;6;8;BÝLSEÇ-9;
+BÝL524;Kritik Altyapýlar ve Güvenliði (TS9);Critic infrastructure And Security (TE9);2;2;0;3;6;8;BÝLSEÇ-9;
+BÝL526;Bilgisayar Müh. Özel Konular - II (TS9);Special Topics in Computer Engineering-II (TE9);2;2;0;3;6;8;BÝLSEÇ-9;
+BÝL528;Týbbi Biliþime Giriþ (TS9);Introduction To Medical Informatics (TE9);2;2;0;3;6;8;BÝLSEÇ-9;
+BÝL530;Mühendislik Ekonomisi (TS9);Engineering Economics (TE9);2;2;0;3;6;8;BÝLSEÇ-9;
+BÝL532;Adli Biliþim (TS9);Forensic Informatics (TE9);2;2;0;3;6;8;BÝLSEÇ-9;
+BÝLSEÇ-8;Teknik Seçmeli Ders 8;TECHNICAL ELECTIVE COURSE 8;2;2;0;3;6;8;G;
+BÝLSEÇ-9;Teknik Seçmeli Ders 9;TECHNICAL ELECTIVE COURSE 9;2;2;0;3;6;8;G;
+LABSEÇ-II;Seçmeli Laboratuvar II;Technical Elective Lab-II;0;0;2;1;3;8;G;
+SSD2;Sosyal Seçmeli Ders II;Social Elective Course II;2;0;0;2;2;8;G;
+BÝL416;Bilgisayarlý Görü Laboratuvarý (SL 2);Computer Vision Lab. (EL2);0;0;2;1;3;8;LABSEÇ-II;
+BÝL418;Yazýlým Test Süreçleri Laboratuvarý (SL 2);Software Test Processes Lab. (EL2);0;0;2;1;3;8;LABSEÇ-II;
+BÝL434;Coðrafi Bilgi Sistemleri Laboratuvarý (SL 2);Geographic Information Systems Lab. (EL2);0;0;2;1;3;8;LABSEÇ-II;
+BÝL478;Programlamada Özel Konular Lab. (SL2);Special Topics in Programming Lab.(EL2);0;0;0;1;3;8;LABSEÇ-II;
+BÝL482;Mikrodenetleyici Lab. (SL2);Microcontrollers Lab.(EL2);0;0;2;1;3;8;LABSEÇ-II;
+BÝL488;Veri Tabaný Laboratuvarý (SL2);Database Management Systems Lab. (EL2);0;0;2;1;3;8;LABSEÇ-II;
+BÝL490;Yazýlým Mühendisliði Laboratuvarý (SL 2);Software Engineering Lab. (EL2);0;0;2;1;3;8;LABSEÇ-II;
+BÝL494;Web Teknolojileri Laboratuvarý (SL2);Web Technologies Lab.(EL2);0;0;2;1;3;8;LABSEÇ-II;
+BÝL496;Bilgisayar Aðlarý Laboratuvarý (SL2);Computer Networks Lab. (EL2);0;0;2;1;3;8;LABSEÇ-II;
+BÝL400;Bitirme Projesi ****;Graduation Project ****;1;2;0;2;13;8;Z;BÝL409
+BÝL502;Mesleki Uygulama Programý;Professional Practice Program;6;4;2;9;30;8;Z;
+SAN.SEÇ.BÝL;Sanayi Uygulamasý (Seçmeli);Industrial Application (IE);0;14;0;7;15;8;Z;
