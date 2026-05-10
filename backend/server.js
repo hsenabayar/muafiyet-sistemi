@@ -11,8 +11,19 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Rotalar
+// --- Rotalar (Routes) ---
+
+// 🔐 Kimlik Doğrulama (Login/Register)
 app.use('/api/auth', require('./routes/authRoutes'));
+
+// 📖 Müfredat İşlemleri (Ders Listeleme/Ekleme)
+app.use('/api/curriculum', require('./routes/curriculumRoutes'));
+
+// 📄 Muafiyet Başvuru İşlemleri (Başvuru Oluşturma/Eşleştirme)
+app.use('/api/applications', require('./routes/applicationRoutes'));
+
+
+// --- Sistem Kontrolleri ---
 
 // Bağlantı Testi
 app.get('/api/test', async (req, res) => {
@@ -32,7 +43,7 @@ app.get('/api/test', async (req, res) => {
     }
 });
 
-// Hata Yakalayıcı
+// Hata Yakalayıcı (Error Handler)
 app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).json({ status: "error", message: "Sunucu hatası!" });

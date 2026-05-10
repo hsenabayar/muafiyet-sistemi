@@ -1,3 +1,8 @@
+// --- TEST LOGLARI BAŞLANGIÇ ---
+console.log("🔍 DB_USER:", process.env.DB_USER);
+console.log("🔍 DB_PASSWORD:", process.env.DB_PASSWORD);
+console.log("🔍 DB_HOST:", process.env.DB_HOST);
+// --- TEST LOGLARI BİTİŞ ---
 const { Pool } = require('pg');
 
 // server.js zaten dotenv'i çalıştırdığı için burada tekrar çağırmaya gerek yok 
@@ -8,11 +13,11 @@ if (!process.env.DB_USER) {
 }
 
 const pool = new Pool({
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    password: String(process.env.DB_PASSWORD), // Şifreyi string'e zorla (1234 gibi sayıları korur)
-    port: process.env.DB_PORT || 5432,
+    user: 'postgres',
+    host: 'localhost',
+    database: 'muafiyet_db',
+    password: '1234',
+    port: 5432,
 });
 
 // Bağlantı sağlandığında log bas
