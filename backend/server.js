@@ -53,3 +53,13 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`🚀 Sunucu http://localhost:${PORT} üzerinde çalışıyor.`);
 });
+
+// Örnek müfredat rotası
+app.get('/api/curriculum', async (req, res) => {
+    try {
+        const result = await pool.query("SELECT * FROM courses"); // Veritabanındaki tablo adın 'courses' ise
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ message: "Veritabanından dersler çekilemedi." });
+    }
+});

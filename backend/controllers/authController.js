@@ -7,7 +7,6 @@ exports.register = async (req, res) => {
     const { username, password, role, fullName, studentNumber, department } = req.body;
 
     try {
-        // Şifreyi güvenlik için hash'liyoruz (Hocanızın istediği güvenlik katmanı)
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
@@ -26,23 +25,29 @@ exports.register = async (req, res) => {
 
 // 🔑 Kullanıcı Girişi (Login)
 exports.login = async (req, res) => {
-    const { username, password } = req.body;
+    const { username, password, role } = req.body; // Frontend'den seçilen rolü de aldık
 
     try {
         const userResult = await db.query('SELECT * FROM Users WHERE Username = $1', [username]);
         if (userResult.rows.length === 0) {
-            return res.status(404).json({ error: "Kullanıcı bulunamadı." });
+            return res.status(404).json({ status: "error", message: "Kullanıcı bulunamadı." });
         }
 
         const user = userResult.rows[0];
 
-        // Şifre kontrolü
-        const isMatch = await bcrypt.compare(password, user.passwordhash);
-        if (!isMatch) {
-            return res.status(400).json({ error: "Hatalı şifre." });
+        // 🛡️ Kritik Kontrol: Seçilen Rol ile Veritabanındaki Rol Uyuşuyor mu?
+        if (role && user.role !== role) {
+            return res.status(403).json({ 
+                status: "error", 
+                message: `Bu hesap ${role} yetkisine sahip değil. Lütfen doğru rolü seçin.` 
+            });
         }
 
-        // JWT Token oluştur (1 gün geçerli)
+        const isMatch = await bcrypt.compare(password, user.passwordhash);
+        if (!isMatch) {
+            return res.status(400).json({ status: "error", message: "Hatalı şifre." });
+        }
+
         const token = jwt.sign(
             { id: user.userid, role: user.role },
             process.env.JWT_SECRET,
@@ -52,9 +57,13 @@ exports.login = async (req, res) => {
         res.json({
             status: "success",
             token,
-            user: { id: user.userid, name: user.fullname, role: user.role }
+            user: { 
+                id: user.userid, 
+                fullname: user.fullname, 
+                role: user.role 
+            }
         });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ status: "error", message: err.message });
     }
 };

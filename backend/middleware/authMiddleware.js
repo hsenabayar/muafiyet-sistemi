@@ -30,3 +30,17 @@ exports.checkRole = (roles) => {
         next();
     };
 };
+
+// Sadece belirli rollerin geçmesine izin veren middleware
+exports.authorize = (...roles) => {
+    return (req, res, next) => {
+        // req.user bilgisi verifyToken'dan geliyor olmalı
+        if (!roles.includes(req.user.role)) {
+            return res.status(403).json({ 
+                status: "error", 
+                message: "Bu işlem için yetkiniz bulunmamaktadır." 
+            });
+        }
+        next();
+    };
+};
