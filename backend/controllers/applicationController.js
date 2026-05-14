@@ -319,7 +319,7 @@ exports.generatePDF = async (req, res) => {
 exports.getCurriculumCourses = async (req, res) => {
     try {
         const courses = await db.query(
-            `SELECT courseid, coursecode, coursename, akts, coursetype 
+            `SELECT courseid, coursecode, coursename, localcredit, akts, coursetype 
              FROM curriculum 
              ORDER BY semester, coursename ASC`
         );

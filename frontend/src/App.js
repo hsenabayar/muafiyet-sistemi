@@ -1,17 +1,21 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import ExemptionForm from './components/ExemptionForm';
-import Login from './components/Login'; // Birazdan oluşturacağız/güncelleyeceğiz
+import Login from './components/Login';
+import TeacherDashboard from './components/TeacherDashboard'; // Yeni oluşturacağın bileşen
+import AdminDashboard from './components/AdminDashboard';     // Yeni oluşturacağın bileşen
 
 // 🔒 Yetkisiz erişimi engelleyen koruyucu bileşen
 const ProtectedRoute = ({ children, allowedRoles }) => {
     const token = localStorage.getItem('token');
     const role = localStorage.getItem('role');
 
+    // Hiç giriş yapılmamışsa login'e at
     if (!token) {
         return <Navigate to="/login" replace />;
     }
 
+    // Giriş yapılmış ama rolü bu sayfa için yetersizse unauthorized'a at
     if (allowedRoles && !allowedRoles.includes(role)) {
         return <Navigate to="/unauthorized" replace />;
     }
@@ -24,10 +28,19 @@ function App() {
         <Router>
             <div className="App">
                 <Routes>
-                    {/* Herkese açık rota */}
+                    {/* Herkese açık rotalar */}
                     <Route path="/login" element={<Login />} />
+                    
+                    {/* Yetkisiz Erişim Sayfası */}
+                    <Route path="/unauthorized" element={
+                        <div style={{ textAlign: 'center', marginTop: '50px' }}>
+                            <h1>403 - Yetkisiz Erişim</h1>
+                            <p>Bu sayfayı görüntülemek için gerekli yetkiye sahip değilsiniz.</p>
+                            <button onClick={() => window.location.href='/login'}>Giriş Sayfasına Dön</button>
+                        </div>
+                    } />
 
-                    {/* Sadece ÖĞRENCİ erişebilir */}
+                    {/* 🎓 ÖĞRENCİ: Sadece başvuru formu */}
                     <Route 
                         path="/basvuru-yap" 
                         element={
@@ -37,12 +50,22 @@ function App() {
                         } 
                     />
 
-                    {/* Sadece HOCA erişebilir (Dashboard'u sonra yapacağız) */}
+                    {/* 👨‍🏫 BÖLÜM YETKİLİSİ & ÖĞRENCİ İŞLERİ: Başvuru listesi ve Onay */}
                     <Route 
                         path="/hoca-paneli" 
                         element={
                             <ProtectedRoute allowedRoles={['teacher', 'commission']}>
-                                <div>Hoca Onay Paneli Çok Yakında...</div>
+                                <TeacherDashboard />
+                            </ProtectedRoute>
+                        } 
+                    />
+
+                    {/* ⚙️ ADMIN: Sistem yönetimi */}
+                    <Route 
+                        path="/admin-paneli" 
+                        element={
+                            <ProtectedRoute allowedRoles={['admin']}>
+                                <AdminDashboard />
                             </ProtectedRoute>
                         } 
                     />

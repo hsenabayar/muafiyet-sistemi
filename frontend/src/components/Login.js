@@ -83,6 +83,7 @@ const Login = () => {
                             type="text" 
                             placeholder="Kullanıcı Adı / E-posta" 
                             onChange={e => setUsername(e.target.value)} 
+                            autoComplete="off"
                             style={{ width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box' }} 
                             required 
                         />
@@ -92,6 +93,7 @@ const Login = () => {
                             type="password" 
                             placeholder="Şifre" 
                             onChange={e => setPassword(e.target.value)} 
+                            autoComplete="new-password"
                             style={{ width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box' }} 
                             required 
                         />
