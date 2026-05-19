@@ -204,7 +204,7 @@ const ExemptionForm = () => {
                 program
             });
 
-            setApplicationId(res.data.applicationId || res.data.data?.applicationId);
+            setApplicationId(appRes.data.applicationId || appRes.data.data?.applicationId);
             alert("Başvuru taslağı oluşturuldu.");
         } catch (err) {
             alert(err.response?.data?.message || "Başvuru taslağı oluşturulamadı.");
@@ -395,7 +395,6 @@ const ExemptionForm = () => {
                 sourceFaculty,
                 sourceDepartment,
                 intakeNote,
-
                 studentNo,
                 studentName,
                 tcNo,
@@ -414,8 +413,6 @@ const ExemptionForm = () => {
                     externalCourses: mapping.externalCourses
                 });
             }
-
-            setApplicationId(newApplicationId);
 
             const formData = new FormData();
             formData.append('applicationId', newApplicationId);
@@ -437,6 +434,8 @@ const ExemptionForm = () => {
                     'Content-Type': 'multipart/form-data'
                 }
             });
+
+            setApplicationId(newApplicationId);
 
             setSubmittedApplication({
                 applicationId: newApplicationId,
@@ -526,11 +525,9 @@ const ExemptionForm = () => {
                         textAlign: 'center'
                     }}>
                         <h2 style={{ color: '#198754', marginBottom: '5px' }}>
-                            Başvurunuz Komisyona Gönderildi
+                            Başvuru Özeti
                         </h2>
-                        <p style={{ color: '#666' }}>
-                            Başvuru No: {submittedApplication.applicationId}
-                        </p>
+
                     </div>
 
                     <div style={sectionStyle}>
@@ -700,80 +697,106 @@ const ExemptionForm = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>Transkript / Not Durum Belgesi</td>
-                                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>
-                                        {submittedApplication.documents?.transcript?.name || '-'}
-                                    </td>
-                                    <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
-                                        {submittedApplication.documents?.transcript ? (
-                                            <button
-                                                type="button"
-                                                onClick={() => openFilePreview(submittedApplication.documents.transcript)}
-                                                style={{
-                                                    padding: '6px 10px',
-                                                    background: '#004a99',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: '4px',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                Görüntüle
-                                            </button>
-                                        ) : '-'}
-                                    </td>
-                                </tr>
+                                {submittedApplication.documents?.attachments?.length > 0 ? (
+                                    submittedApplication.documents.attachments.map((file, index) => (
+                                        <tr key={index}>
+                                            <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                                                {file.filetype}
+                                            </td>
 
-                                <tr>
-                                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>Onaylı Müfredat ve Ders İçerikleri</td>
-                                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>
-                                        {submittedApplication.documents?.curriculum?.name || '-'}
-                                    </td>
-                                    <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
-                                        {submittedApplication.documents?.curriculum ? (
-                                            <button
-                                                type="button"
-                                                onClick={() => openFilePreview(submittedApplication.documents.curriculum)}
-                                                style={{
-                                                    padding: '6px 10px',
-                                                    background: '#004a99',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: '4px',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                Görüntüle
-                                            </button>
-                                        ) : '-'}
-                                    </td>
-                                </tr>
+                                            <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                                                {file.filename}
+                                            </td>
 
-                                <tr>
-                                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>Transkriptte Yoksa Staj Durumunu Gösteren Belge</td>
-                                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>
-                                        {submittedApplication.documents?.internship?.name || '-'}
-                                    </td>
-                                    <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
-                                        {submittedApplication.documents?.internship ? (
-                                            <button
-                                                type="button"
-                                                onClick={() => openFilePreview(submittedApplication.documents.internship)}
-                                                style={{
-                                                    padding: '6px 10px',
-                                                    background: '#004a99',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: '4px',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                Görüntüle
-                                            </button>
-                                        ) : '-'}
-                                    </td>
-                                </tr>
+                                            <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
+                                                Kayıtlı
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <>
+                                        <tr>
+                                            <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                                                Transkript / Not Durum Belgesi
+                                            </td>
+                                            <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                                                {submittedApplication.documents?.transcript?.name || '-'}
+                                            </td>
+                                            <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
+                                                {submittedApplication.documents?.transcript ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openFilePreview(submittedApplication.documents.transcript)}
+                                                        style={{
+                                                            padding: '6px 10px',
+                                                            background: '#004a99',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: '4px',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        Görüntüle
+                                                    </button>
+                                                ) : '-'}
+                                            </td>
+                                        </tr>
+
+                                        <tr>
+                                            <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                                                Onaylı Müfredat ve Ders İçerikleri
+                                            </td>
+                                            <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                                                {submittedApplication.documents?.curriculum?.name || '-'}
+                                            </td>
+                                            <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
+                                                {submittedApplication.documents?.curriculum ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openFilePreview(submittedApplication.documents.curriculum)}
+                                                        style={{
+                                                            padding: '6px 10px',
+                                                            background: '#004a99',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: '4px',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        Görüntüle
+                                                    </button>
+                                                ) : '-'}
+                                            </td>
+                                        </tr>
+
+                                        <tr>
+                                            <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                                                Transkriptte Yoksa Staj Durumunu Gösteren Belge
+                                            </td>
+                                            <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                                                {submittedApplication.documents?.internship?.name || '-'}
+                                            </td>
+                                            <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
+                                                {submittedApplication.documents?.internship ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openFilePreview(submittedApplication.documents.internship)}
+                                                        style={{
+                                                            padding: '6px 10px',
+                                                            background: '#004a99',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: '4px',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        Görüntüle
+                                                    </button>
+                                                ) : '-'}
+                                            </td>
+                                        </tr>
+                                    </>
+                                )}
                             </tbody>
                         </table>
                     </div>

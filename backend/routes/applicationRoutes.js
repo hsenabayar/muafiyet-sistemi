@@ -17,6 +17,19 @@ router.get('/my-latest', verifyToken, appController.getMyLatestApplication);
 // Müfredat listesini çekme
 router.get('/curriculum', verifyToken, appController.getCurriculumCourses);
 
+router.get('/my-latest', verifyToken, checkRole(['student']), appController.getMyLatestApplication);
+
+router.post(
+    '/upload-documents',
+    verifyToken,
+    appController.upload.fields([
+        { name: 'transcript', maxCount: 1 },
+        { name: 'curriculum', maxCount: 1 },
+        { name: 'internship', maxCount: 1 }
+    ]),
+    appController.uploadDocuments
+);
+
 
 // 👨‍🏫 HOCA / KOMİSYON ROTALARI
 

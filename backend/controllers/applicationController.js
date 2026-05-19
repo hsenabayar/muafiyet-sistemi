@@ -1,6 +1,8 @@
 const db = require('../config/db');
 const multer = require('multer');
+const fs = require('fs');
 const path = require('path');
+
 
 /**
  * YARDIMCI FONKSİYONLAR
@@ -23,6 +25,25 @@ const getSuggestedGrade = (score) => {
     if (score >= 0.75) return 'DD';
     return 'FF';
 };
+
+const uploadDir = path.join(__dirname, '..', 'uploads');
+
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir);
+}
+
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+        const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+        const uniqueName = Date.now() + '-' + originalName;
+        cb(null, uniqueName);
+    }
+});
+
+exports.upload = multer({ storage });
 
 /**
  * CONTROLLER FONKSİYONLARI
@@ -476,6 +497,7 @@ exports.getMyLatestApplication = async (req, res) => {
             };
         });
 
+
         const attachmentsResult = await db.query(
             `SELECT attachmentid, filetype, filename, filepath
      FROM Attachments
@@ -500,18 +522,6 @@ exports.getMyLatestApplication = async (req, res) => {
     }
 };
 
-
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploads/');
-    },
-    filename: function (req, file, cb) {
-        const uniqueName = Date.now() + '-' + file.originalname;
-        cb(null, uniqueName);
-    }
-});
-
-exports.upload = multer({ storage });
 
 
 exports.uploadDocuments = async (req, res) => {
@@ -554,5 +564,41 @@ exports.uploadDocuments = async (req, res) => {
             status: "error",
             message: err.message
         });
+    }
+};
+
+exports.uploadDocuments = async (req, res) => {
+    const { applicationId } = req.body;
+
+    try {
+        const files = req.files;
+
+        const fileList = [
+            { field: 'transcript', type: 'Transkript' },
+            { field: 'curriculum', type: 'Müfredat ve Ders İçerikleri' },
+            { field: 'internship', type: 'Staj Belgesi' }
+        ];
+
+        for (const item of fileList) {
+            if (files[item.field]) {
+                const file = files[item.field][0];
+
+                await db.query(
+                    `INSERT INTO Attachments 
+    (ApplicationID, FileType, FileName, FilePath)
+    VALUES ($1, $2, $3, $4)`,
+                    [
+                        applicationId,
+                        item.type,
+                        Buffer.from(file.originalname, 'latin1').toString('utf8'),
+                        file.path
+                    ]
+                );
+            }
+        }
+
+        res.json({ status: "success", message: "Belgeler yüklendi." });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
     }
 };
