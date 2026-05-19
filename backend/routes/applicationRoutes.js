@@ -4,21 +4,43 @@ const appController = require('../controllers/applicationController');
 const { verifyToken, checkRole } = require('../middleware/authMiddleware');
 
 // 🎓 ÖĞRENCİ ROTALARI
+
 // Yeni başvuru oluşturma
 router.post('/create', verifyToken, checkRole(['student']), appController.createApplication);
 
-// Başvuruya ders ekleme (BİLSEÇ-9 kısıtlaması burada çalışır)
+// Başvuruya ders ekleme
 router.post('/add-course', verifyToken, checkRole(['student']), appController.addCourseMapping);
 
-// Müfredat listesini çekme (Başvuru yaparken dropdown'ı doldurur)
+// Öğrencinin son başvurusunu getirme
+router.get('/my-latest', verifyToken, appController.getMyLatestApplication);
+
+// Müfredat listesini çekme
 router.get('/curriculum', verifyToken, appController.getCurriculumCourses);
 
 
 // 👨‍🏫 HOCA / KOMİSYON ROTALARI
-// Kesin karar verme (Sadece yetkili personel)
-router.post('/finalize-decision', verifyToken, checkRole(['teacher', 'commission']), appController.finalizeDecision); 
 
-// PDF indirme (Resmi OMÜ Formu çıktısı)
+// Kesin karar verme
+router.post(
+    '/finalize-decision',
+    verifyToken,
+    checkRole(['teacher', 'comission']),
+    appController.finalizeDecision
+);
+
+// PDF indirme
 router.get('/download-report/:id', verifyToken, appController.generatePDF);
 
 module.exports = router;
+
+router.post(
+    '/upload-documents',
+    verifyToken,
+    appController.upload.fields([
+        { name: 'transcript', maxCount: 1 },
+        { name: 'curriculum', maxCount: 1 },
+        { name: 'internship', maxCount: 1 }
+    ]),
+    appController.uploadDocuments
+);
+

@@ -1,4 +1,6 @@
 const db = require('../config/db');
+const multer = require('multer');
+const path = require('path');
 
 /**
  * YARDIMCI FONKSİYONLAR
@@ -28,24 +30,66 @@ const getSuggestedGrade = (score) => {
 
 // 📄 Yeni Muafiyet Başvurusu Oluştur
 exports.createApplication = async (req, res) => {
-    const { 
-        sourceUniversity, 
-        sourceFaculty, 
-        sourceDepartment, 
-        academicYear, 
+    const {
+        sourceUniversity,
+        sourceFaculty,
+        sourceDepartment,
+        academicYear,
         semester,
-        exemptionReason, 
-        intakeNote 
+        exemptionReason,
+        intakeNote,
+
+        studentNo,
+        studentName,
+        tcNo,
+        faculty,
+        department,
+        program
     } = req.body;
-    
-    const userId = req.user.id; 
+
+    console.log("Başvuru oluşturma body:", req.body);
+
+    const userId = req.user.id;
 
     try {
         const newApp = await db.query(
             `INSERT INTO Applications 
-            (UserID, SourceUniversity, SourceFaculty, SourceDepartment, AcademicYear, Semester, Status, ExemptionReason, IntakeNote) 
-             VALUES ($1, $2, $3, $4, $5, $6, 'Taslak', $7, $8) RETURNING ApplicationID`,
-            [userId, sourceUniversity, sourceFaculty, sourceDepartment, academicYear, semester, exemptionReason, intakeNote]
+    (
+        UserID,
+        SourceUniversity,
+        SourceFaculty,
+        SourceDepartment,
+        AcademicYear,
+        Semester,
+        Status,
+        ExemptionReason,
+        IntakeNote,
+        StudentNo,
+        StudentName,
+        TcNo,
+        Faculty,
+        Department,
+        Program
+    ) 
+    VALUES 
+    ($1, $2, $3, $4, $5, $6, 'Komisyona Gönderildi', $7, $8, $9, $10, $11, $12, $13, $14)
+    RETURNING ApplicationID`,
+            [
+                userId,
+                sourceUniversity,
+                sourceFaculty,
+                sourceDepartment,
+                academicYear,
+                semester,
+                exemptionReason,
+                intakeNote,
+                studentNo,
+                studentName,
+                tcNo,
+                faculty,
+                department,
+                program
+            ]
         );
 
         res.status(201).json({
@@ -65,34 +109,34 @@ exports.addCourseMapping = async (req, res) => {
     try {
         // 1. Hedef dersin bilgilerini çek
         const targetResult = await db.query(
-            `SELECT akts, coursetype, coursename FROM curriculum WHERE courseid = $1`, 
+            `SELECT akts, coursetype, coursename FROM curriculum WHERE courseid = $1`,
             [targetCourseId]
         );
-        
+
         if (targetResult.rows.length === 0) {
             return res.status(404).json({ status: "error", message: "Hedef ders bulunamadı." });
         }
-        
+
         const targetAKTS = targetResult.rows[0].akts;
         const courseGroup = targetResult.rows[0].coursetype;
 
         // 2. GRUP KISITLAMASI KONTROLÜ (Kritik Nokta)
-        const restrictedGroups = ['SSD', 'TS6', 'SSD1', 'SSD2', 'BİLSEÇ-9']; 
-        
+        const restrictedGroups = ['SSD', 'TS6', 'SSD1', 'SSD2', 'BİLSEÇ-9'];
+
         if (courseGroup && restrictedGroups.includes(courseGroup)) {
             const alreadyExists = await db.query(
                 `SELECT c.CourseName 
                  FROM ExemptionDecisions ed
                  JOIN curriculum c ON ed.TargetCourseID = c.courseid
-                 WHERE ed.ApplicationID = $1 AND c.coursetype = $2`, 
+                 WHERE ed.ApplicationID = $1 AND c.coursetype = $2`,
                 [applicationId, courseGroup]
             );
 
             if (alreadyExists.rows.length > 0) {
                 // Eğer burada kayıt varsa, işlemi burada kesip hata döner
-                return res.status(400).json({ 
-                    status: "error", 
-                    message: `${courseGroup} grubundan zaten bir ders seçtiniz (${alreadyExists.rows[0].coursename}).` 
+                return res.status(400).json({
+                    status: "error",
+                    message: `${courseGroup} grubundan zaten bir ders seçtiniz (${alreadyExists.rows[0].coursename}).`
                 });
             }
         }
@@ -127,7 +171,7 @@ exports.addCourseMapping = async (req, res) => {
                  VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING ExtCourseID`,
                 [applicationId, course.code, course.name, course.grade, course.akts, course.numericGrade, course.sourceCredit]
             );
-            
+
             await db.query(
                 `INSERT INTO DecisionDetails (DecisionID, ExtCourseID) VALUES ($1, $2)`,
                 [decisionId, extRes.rows[0].extcourseid]
@@ -140,8 +184,8 @@ exports.addCourseMapping = async (req, res) => {
             warnings.push(`Kredi Uyarısı: Gelen derslerin toplam AKTS'si (${totalSourceAKTS}), müfredattaki dersten (${targetAKTS}) düşüktür.`);
         }
 
-        res.json({ 
-            status: "success", 
+        res.json({
+            status: "success",
             message: "Eşleştirme kaydedildi. Hoca onayı bekleniyor.",
             analysis: {
                 calculatedScore: calculatedAverage.toFixed(2),
@@ -258,7 +302,7 @@ exports.generatePDF = async (req, res) => {
         doc.text(`Bölüm: Bilgisayar Mühendisliği Bölümü`, 250, startY + 25);
         doc.text(`T.C. Kimlik No: ${app.tckimlikno || '-'}`, 40, startY + 40);
         doc.text(`Muafiyet Gerekçesi: ${app.exemptionreason || 'Yatay Geçiş'}`, 250, startY + 40);
-        
+
         doc.moveDown(3);
 
         // Karşılaştırmalı Muafiyet Tablosu Başlıkları
@@ -273,10 +317,10 @@ exports.generatePDF = async (req, res) => {
         decisions.rows.forEach((row, i) => {
             // Satır Çizgisi
             doc.moveTo(30, currentY + 25).lineTo(565, currentY + 25).stroke('#cccccc');
-            
+
             // Sol Taraf (Dış Ders)
             doc.fontSize(8).text(row.source_details, 40, currentY, { width: 240 });
-            
+
             // Sağ Taraf (OMÜ Ders)
             doc.text(`[${row.target_code}] ${row.target_name}`, 300, currentY);
             doc.text(`Not: ${row.finalgrade} | AKTS: ${row.target_akts}`, 300, currentY + 10);
@@ -294,7 +338,7 @@ exports.generatePDF = async (req, res) => {
         // 4'lü Komisyon İmza Bloğu (Görsel 40'a göre)
         const footerY = 720;
         doc.fontSize(8);
-        
+
         doc.text('Dr. Öğr. Üyesi İsmail İŞERİ', 40, footerY);
         doc.text('Komisyon Üyesi', 40, footerY + 10);
 
@@ -319,12 +363,196 @@ exports.generatePDF = async (req, res) => {
 exports.getCurriculumCourses = async (req, res) => {
     try {
         const courses = await db.query(
-            `SELECT courseid, coursecode, coursename, localcredit, akts, coursetype 
+            `SELECT 
+                courseid,
+                coursecode,
+                coursename,
+                localcredit,
+                akts,
+                semester,
+                coursetype,
+                prerequisitecode
              FROM curriculum 
              ORDER BY semester, coursename ASC`
         );
+
         res.json({ status: "success", data: courses.rows });
     } catch (err) {
         res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
+
+// 👤 Öğrencinin Son Başvurusunu Getir
+exports.getMyLatestApplication = async (req, res) => {
+    const userId = req.user.id || req.user.userid || req.user.userId;
+    console.log("my-latest req.user:", req.user);
+    console.log("my-latest userId:", userId);
+
+    try {
+        const appResult = await db.query(
+            `SELECT 
+            a.*,
+            u.fullname,
+            u.studentnumber,
+            u.tckimlikno
+        FROM Applications a
+        JOIN Users u ON a.UserID = u.UserID
+        WHERE a.UserID = $1
+        ORDER BY a.ApplicationID DESC
+        LIMIT 1`,
+            [userId]
+        );
+
+        if (appResult.rows.length === 0) {
+            return res.json({
+                status: "empty",
+                message: "Öğrenciye ait başvuru bulunamadı."
+            });
+        }
+
+        const application = appResult.rows[0];
+
+        const decisionsResult = await db.query(
+            `SELECT 
+                ed.DecisionID,
+                ed.TargetCourseID,
+                c.CourseCode,
+                c.CourseName,
+                c.LocalCredit,
+                c.AKTS,
+                ed.SuggestedGrade,
+                ed.FinalGrade,
+                ed.IsApproved,
+                ed.ReviewNote
+             FROM ExemptionDecisions ed
+             JOIN Curriculum c ON ed.TargetCourseID = c.CourseID
+             WHERE ed.ApplicationID = $1
+             ORDER BY ed.DecisionID ASC`,
+            [application.applicationid]
+        );
+
+        const externalResult = await db.query(
+            `SELECT 
+                dd.DecisionID,
+                ec.CourseCode,
+                ec.CourseName,
+                ec.SourceCredit,
+                ec.SourceAKTS,
+                ec.Grade
+             FROM DecisionDetails dd
+             JOIN ExternalCourses ec ON dd.ExtCourseID = ec.ExtCourseID
+             JOIN ExemptionDecisions ed ON dd.DecisionID = ed.DecisionID
+             WHERE ed.ApplicationID = $1
+             ORDER BY dd.DecisionID ASC`,
+            [application.applicationid]
+        );
+
+        const mappings = decisionsResult.rows.map(decision => {
+            const externalCourses = externalResult.rows
+                .filter(ext => ext.decisionid === decision.decisionid)
+                .map(ext => ({
+                    code: ext.coursecode,
+                    name: ext.coursename,
+                    sourceCredit: ext.sourcecredit,
+                    akts: ext.sourceakts,
+                    grade: ext.grade
+                }));
+
+            return {
+                targetCourseId: decision.targetcourseid,
+                targetCourse: {
+                    courseid: decision.targetcourseid,
+                    coursecode: decision.coursecode,
+                    coursename: decision.coursename,
+                    localcredit: decision.localcredit,
+                    akts: decision.akts
+                },
+                suggestedGrade: decision.suggestedgrade,
+                finalGrade: decision.finalgrade,
+                isApproved: decision.isapproved,
+                reviewNote: decision.reviewnote,
+                externalCourses
+            };
+        });
+
+        const attachmentsResult = await db.query(
+            `SELECT attachmentid, filetype, filename, filepath
+     FROM Attachments
+     WHERE ApplicationID = $1`,
+            [application.applicationid]
+        );
+
+        res.json({
+            status: "success",
+            data: {
+                application,
+                mappings,
+                attachments: attachmentsResult.rows
+            }
+        });
+
+    } catch (err) {
+        res.status(500).json({
+            status: "error",
+            message: err.message
+        });
+    }
+};
+
+
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'uploads/');
+    },
+    filename: function (req, file, cb) {
+        const uniqueName = Date.now() + '-' + file.originalname;
+        cb(null, uniqueName);
+    }
+});
+
+exports.upload = multer({ storage });
+
+
+exports.uploadDocuments = async (req, res) => {
+    const { applicationId } = req.body;
+
+    try {
+        const files = req.files;
+
+        const fileList = [
+            { field: 'transcript', type: 'Transkript' },
+            { field: 'curriculum', type: 'Müfredat ve Ders İçerikleri' },
+            { field: 'internship', type: 'Staj Belgesi' }
+        ];
+
+        for (const item of fileList) {
+            if (files[item.field]) {
+                const file = files[item.field][0];
+
+                await db.query(
+                    `INSERT INTO Attachments 
+                    (ApplicationID, FileType, FileName, FilePath)
+                    VALUES ($1, $2, $3, $4)`,
+                    [
+                        applicationId,
+                        item.type,
+                        file.originalname,
+                        file.path
+                    ]
+                );
+            }
+        }
+
+        res.json({
+            status: "success",
+            message: "Belgeler başarıyla yüklendi."
+        });
+
+    } catch (err) {
+        res.status(500).json({
+            status: "error",
+            message: err.message
+        });
     }
 };

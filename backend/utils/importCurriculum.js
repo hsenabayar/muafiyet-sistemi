@@ -38,6 +38,7 @@ const importCurriculum = async () => {
                 const credit = parseFloat(row['K']) || 0; // Excel'inde kredi 'K' olarak görünüyor
                 const akts = parseInt(row['AKTS']) || 0;
                 const semester = parseInt(row['Dnem']) || 0;
+                
 
                 // Eğer kod boşsa satırı atla
                 if (!courseCode) continue;
