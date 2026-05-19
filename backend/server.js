@@ -11,6 +11,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // --- Rotalar (Routes) ---
 
 // 🔐 Kimlik Doğrulama (Login/Register)
@@ -29,16 +32,16 @@ app.use('/api/applications', require('./routes/applicationRoutes'));
 app.get('/api/test', async (req, res) => {
     try {
         const result = await db.query('SELECT NOW()');
-        res.status(200).json({ 
-            status: "success", 
-            message: "Sistem Aktif", 
-            dbTime: result.rows[0].now 
+        res.status(200).json({
+            status: "success",
+            message: "Sistem Aktif",
+            dbTime: result.rows[0].now
         });
     } catch (err) {
         console.error("❌ Test Hatası:", err.message);
-        res.status(500).json({ 
-            status: "error", 
-            message: "DB Hatası: " + err.message 
+        res.status(500).json({
+            status: "error",
+            message: "DB Hatası: " + err.message
         });
     }
 });

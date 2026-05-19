@@ -57,3 +57,32 @@ router.post(
     appController.uploadDocuments
 );
 
+router.get(
+    '/commission/applications',
+    verifyToken,
+    checkRole(['teacher', 'commission']),
+    appController.getApplicationsForCommission
+);
+
+router.get(
+    '/commission/applications/:id',
+    verifyToken,
+    checkRole(['teacher', 'commission']),
+    appController.getApplicationDetailForCommission
+);
+
+router.post(
+    '/commission/update-target-course',
+    verifyToken,
+    checkRole(['teacher', 'commission']),
+    appController.updateDecisionTargetCourse
+);
+
+
+router.post(
+    '/commission/add-target-course',
+    verifyToken,
+    checkRole(['teacher', 'commission']),
+    appController.addExtraTargetCourseForDecision
+);
+

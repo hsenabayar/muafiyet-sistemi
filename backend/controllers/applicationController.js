@@ -602,3 +602,240 @@ exports.uploadDocuments = async (req, res) => {
         res.status(500).json({ status: "error", message: err.message });
     }
 };
+
+exports.getApplicationsForCommission = async (req, res) => {
+    try {
+        const result = await db.query(
+            `SELECT 
+                ApplicationID,
+                StudentNo,
+                StudentName,
+                Faculty,
+                Department,
+                Program,
+                AcademicYear,
+                Semester,
+                ExemptionReason,
+                SourceUniversity,
+                Status
+             FROM Applications
+             ORDER BY ApplicationID DESC`
+        );
+
+        res.json({
+            status: "success",
+            data: result.rows
+        });
+
+    } catch (err) {
+        res.status(500).json({
+            status: "error",
+            message: err.message
+        });
+    }
+};
+
+exports.getApplicationDetailForCommission = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const appResult = await db.query(
+            `SELECT *
+             FROM Applications
+             WHERE ApplicationID = $1`,
+            [id]
+        );
+
+        if (appResult.rows.length === 0) {
+            return res.status(404).json({
+                status: "error",
+                message: "Başvuru bulunamadı."
+            });
+        }
+
+        const application = appResult.rows[0];
+
+        const decisionsResult = await db.query(
+            `SELECT 
+                ed.DecisionID,
+                ed.TargetCourseID,
+                c.CourseCode,
+                c.CourseName,
+                c.LocalCredit,
+                c.AKTS,
+                ed.SuggestedGrade,
+                ed.FinalGrade,
+                ed.IsApproved,
+                ed.ReviewNote
+             FROM ExemptionDecisions ed
+             JOIN Curriculum c ON ed.TargetCourseID = c.CourseID
+             WHERE ed.ApplicationID = $1
+             ORDER BY ed.DecisionID ASC`,
+            [id]
+        );
+
+        const externalResult = await db.query(
+            `SELECT 
+                dd.DecisionID,
+                ec.CourseCode,
+                ec.CourseName,
+                ec.SourceCredit,
+                ec.SourceAKTS,
+                ec.Grade
+             FROM DecisionDetails dd
+             JOIN ExternalCourses ec ON dd.ExtCourseID = ec.ExtCourseID
+             JOIN ExemptionDecisions ed ON dd.DecisionID = ed.DecisionID
+             WHERE ed.ApplicationID = $1
+             ORDER BY dd.DecisionID ASC`,
+            [id]
+        );
+
+        const attachmentsResult = await db.query(
+            `SELECT attachmentid, filetype, filename, filepath
+             FROM Attachments
+             WHERE ApplicationID = $1`,
+            [id]
+        );
+
+        const mappings = decisionsResult.rows.map(decision => {
+            const externalCourses = externalResult.rows
+                .filter(ext => ext.decisionid === decision.decisionid)
+                .map(ext => ({
+                    code: ext.coursecode,
+                    name: ext.coursename,
+                    sourceCredit: ext.sourcecredit,
+                    akts: ext.sourceakts,
+                    grade: ext.grade
+                }));
+
+            return {
+                decisionId: decision.decisionid,
+                targetCourseId: decision.targetcourseid,
+                targetCourse: {
+                    courseid: decision.targetcourseid,
+                    coursecode: decision.coursecode,
+                    coursename: decision.coursename,
+                    localcredit: decision.localcredit,
+                    akts: decision.akts
+                },
+                suggestedGrade: decision.suggestedgrade,
+                finalGrade: decision.finalgrade,
+                isApproved: decision.isapproved,
+                reviewNote: decision.reviewnote,
+                externalCourses
+            };
+        });
+
+        res.json({
+            status: "success",
+            data: {
+                application,
+                mappings,
+                attachments: attachmentsResult.rows
+            }
+        });
+
+    } catch (err) {
+        res.status(500).json({
+            status: "error",
+            message: err.message
+        });
+    }
+};
+
+exports.updateDecisionTargetCourse = async (req, res) => {
+    const { decisionId, targetCourseId } = req.body;
+
+    try {
+        await db.query(
+            `UPDATE ExemptionDecisions
+             SET TargetCourseID = $1
+             WHERE DecisionID = $2`,
+            [targetCourseId, decisionId]
+        );
+
+        res.json({
+            status: "success",
+            message: "Hedef OMÜ dersi güncellendi."
+        });
+    } catch (err) {
+        res.status(500).json({
+            status: "error",
+            message: err.message
+        });
+    }
+};
+
+// 👨‍🏫 Komisyon: Aynı kaynak derslerle yeni OMÜ dersi ekle
+exports.addExtraTargetCourseForDecision = async (req, res) => {
+    const { decisionId, targetCourseId } = req.body;
+
+    try {
+        // 1. Mevcut kararın ApplicationID değerini bul
+        const decisionResult = await db.query(
+            `SELECT ApplicationID
+             FROM ExemptionDecisions
+             WHERE DecisionID = $1`,
+            [decisionId]
+        );
+
+        if (decisionResult.rows.length === 0) {
+            return res.status(404).json({
+                status: "error",
+                message: "Mevcut karar kaydı bulunamadı."
+            });
+        }
+
+        const applicationId = decisionResult.rows[0].applicationid;
+
+        // 2. Mevcut karara bağlı kaynak dersleri bul
+        const detailResult = await db.query(
+            `SELECT ExtCourseID
+             FROM DecisionDetails
+             WHERE DecisionID = $1`,
+            [decisionId]
+        );
+
+        if (detailResult.rows.length === 0) {
+            return res.status(400).json({
+                status: "error",
+                message: "Bu karara bağlı kaynak ders bulunamadı."
+            });
+        }
+
+        // 3. Yeni OMÜ dersi için yeni karar kaydı oluştur
+        const newDecision = await db.query(
+            `INSERT INTO ExemptionDecisions
+             (ApplicationID, TargetCourseID, IsApproved, SuggestedGrade, CalculatedScore)
+             SELECT ApplicationID, $1, NULL, SuggestedGrade, CalculatedScore
+             FROM ExemptionDecisions
+             WHERE DecisionID = $2
+             RETURNING DecisionID`,
+            [targetCourseId, decisionId]
+        );
+
+        const newDecisionId = newDecision.rows[0].decisionid;
+
+        // 4. Aynı kaynak dersleri yeni karara bağla
+        for (const detail of detailResult.rows) {
+            await db.query(
+                `INSERT INTO DecisionDetails
+                 (DecisionID, ExtCourseID)
+                 VALUES ($1, $2)`,
+                [newDecisionId, detail.extcourseid]
+            );
+        }
+
+        res.json({
+            status: "success",
+            message: "Aynı kaynak derslerle yeni OMÜ dersi eklendi.",
+            newDecisionId
+        });
+
+    } catch (err) {
+        res.status(500).json({
+            status: "error",
+            message: err.message
+        });
+    }
+};
