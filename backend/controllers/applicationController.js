@@ -455,17 +455,18 @@ exports.getMyLatestApplication = async (req, res) => {
 
         const externalResult = await db.query(
             `SELECT 
-                dd.DecisionID,
-                ec.CourseCode,
-                ec.CourseName,
-                ec.SourceCredit,
-                ec.SourceAKTS,
-                ec.Grade
-             FROM DecisionDetails dd
-             JOIN ExternalCourses ec ON dd.ExtCourseID = ec.ExtCourseID
-             JOIN ExemptionDecisions ed ON dd.DecisionID = ed.DecisionID
-             WHERE ed.ApplicationID = $1
-             ORDER BY dd.DecisionID ASC`,
+        dd.DecisionID,
+        ec.ExtCourseID,
+        ec.CourseCode,
+        ec.CourseName,
+        ec.SourceCredit,
+        ec.SourceAKTS,
+        ec.Grade
+     FROM DecisionDetails dd
+     JOIN ExternalCourses ec ON dd.ExtCourseID = ec.ExtCourseID
+     JOIN ExemptionDecisions ed ON dd.DecisionID = ed.DecisionID
+     WHERE ed.ApplicationID = $1
+     ORDER BY dd.DecisionID ASC`,
             [application.applicationid]
         );
 
@@ -473,6 +474,7 @@ exports.getMyLatestApplication = async (req, res) => {
             const externalCourses = externalResult.rows
                 .filter(ext => ext.decisionid === decision.decisionid)
                 .map(ext => ({
+                    extCourseId: ext.extcourseid,
                     code: ext.coursecode,
                     name: ext.coursename,
                     sourceCredit: ext.sourcecredit,
@@ -515,6 +517,9 @@ exports.getMyLatestApplication = async (req, res) => {
         });
 
     } catch (err) {
+        console.error("my-latest hata:", err.message);
+        console.error(err);
+
         res.status(500).json({
             status: "error",
             message: err.message
@@ -676,18 +681,19 @@ exports.getApplicationDetailForCommission = async (req, res) => {
 
         const externalResult = await db.query(
             `SELECT 
-                dd.DecisionID,
-                ec.CourseCode,
-                ec.CourseName,
-                ec.SourceCredit,
-                ec.SourceAKTS,
-                ec.Grade
-             FROM DecisionDetails dd
-             JOIN ExternalCourses ec ON dd.ExtCourseID = ec.ExtCourseID
-             JOIN ExemptionDecisions ed ON dd.DecisionID = ed.DecisionID
-             WHERE ed.ApplicationID = $1
-             ORDER BY dd.DecisionID ASC`,
-            [id]
+        dd.DecisionID,
+        ec.ExtCourseID,
+        ec.CourseCode,
+        ec.CourseName,
+        ec.SourceCredit,
+        ec.SourceAKTS,
+        ec.Grade
+     FROM DecisionDetails dd
+     JOIN ExternalCourses ec ON dd.ExtCourseID = ec.ExtCourseID
+     JOIN ExemptionDecisions ed ON dd.DecisionID = ed.DecisionID
+     WHERE ed.ApplicationID = $1
+     ORDER BY dd.DecisionID ASC`,
+            [application.applicationid]
         );
 
         const attachmentsResult = await db.query(
@@ -701,6 +707,7 @@ exports.getApplicationDetailForCommission = async (req, res) => {
             const externalCourses = externalResult.rows
                 .filter(ext => ext.decisionid === decision.decisionid)
                 .map(ext => ({
+                    extCourseId: ext.extcourseid,
                     code: ext.coursecode,
                     name: ext.coursename,
                     sourceCredit: ext.sourcecredit,
@@ -833,6 +840,156 @@ exports.addExtraTargetCourseForDecision = async (req, res) => {
         });
 
     } catch (err) {
+        res.status(500).json({
+            status: "error",
+            message: err.message
+        });
+    }
+};
+
+// 👨‍🏫 Komisyon: Hedef OMÜ dersini sil
+exports.deleteDecision = async (req, res) => {
+    const { decisionId } = req.params;
+
+    try {
+
+        // Önce bağlı detay kayıtlarını sil
+        await db.query(
+            `DELETE FROM DecisionDetails
+             WHERE DecisionID = $1`,
+            [decisionId]
+        );
+
+        // Sonra karar kaydını sil
+        await db.query(
+            `DELETE FROM ExemptionDecisions
+             WHERE DecisionID = $1`,
+            [decisionId]
+        );
+
+        res.json({
+            status: "success",
+            message: "Hedef OMÜ dersi silindi."
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            status: "error",
+            message: err.message
+        });
+    }
+};
+
+// 👨‍🏫 Komisyon: Kaynak dersi sil
+exports.deleteExternalCourseFromApplication = async (req, res) => {
+    const { extCourseId } = req.params;
+
+    try {
+        // Önce bu kaynak derse bağlı DecisionDetails kayıtlarını sil
+        await db.query(
+            `DELETE FROM DecisionDetails
+             WHERE ExtCourseID = $1`,
+            [extCourseId]
+        );
+
+        // Sonra ExternalCourses kaydını sil
+        await db.query(
+            `DELETE FROM ExternalCourses
+             WHERE ExtCourseID = $1`,
+            [extCourseId]
+        );
+
+        res.json({
+            status: "success",
+            message: "Kaynak ders silindi."
+        });
+
+    } catch (err) {
+        console.error(err);
+
+        res.status(500).json({
+            status: "error",
+            message: err.message
+        });
+    }
+};
+
+// 👨‍🏫 Komisyon: Mevcut hedef OMÜ dersine yeni kaynak ders ekle
+exports.addExternalCourseToDecision = async (req, res) => {
+    const {
+        applicationId,
+        targetCourseId,
+        code,
+        name,
+        sourceCredit,
+        akts,
+        grade
+    } = req.body;
+
+    try {
+        if (!applicationId || !targetCourseId || !code || !name || !akts || !grade) {
+            return res.status(400).json({
+                status: "error",
+                message: "Kaynak ders bilgileri eksik."
+            });
+        }
+
+        // İlgili başvuruda bu hedef OMÜ dersine ait karar kaydını bul
+        const decisionResult = await db.query(
+            `SELECT DecisionID
+             FROM ExemptionDecisions
+             WHERE ApplicationID = $1 AND TargetCourseID = $2
+             ORDER BY DecisionID DESC
+             LIMIT 1`,
+            [applicationId, targetCourseId]
+        );
+
+        if (decisionResult.rows.length === 0) {
+            return res.status(404).json({
+                status: "error",
+                message: "Bu hedef OMÜ dersi için karar kaydı bulunamadı."
+            });
+        }
+
+        const decisionId = decisionResult.rows[0].decisionid;
+
+        // Yeni kaynak dersi ekle
+        const extResult = await db.query(
+            `INSERT INTO ExternalCourses
+             (ApplicationID, CourseCode, CourseName, Grade, SourceAKTS, SourceCredit)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING ExtCourseID`,
+            [
+                applicationId,
+                code,
+                name,
+                grade,
+                Number(akts),
+                sourceCredit ? Number(sourceCredit) : null
+            ]
+        );
+
+        const extCourseId = extResult.rows[0].extcourseid;
+
+        // Kaynak dersi karar kaydına bağla
+        await db.query(
+            `INSERT INTO DecisionDetails
+             (DecisionID, ExtCourseID)
+             VALUES ($1, $2)`,
+            [decisionId, extCourseId]
+        );
+
+        res.json({
+            status: "success",
+            message: "Kaynak ders başarıyla eklendi."
+        });
+
+    } catch (err) {
+        console.error(err);
+
         res.status(500).json({
             status: "error",
             message: err.message

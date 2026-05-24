@@ -35,10 +35,11 @@ const ExemptionForm = () => {
     useEffect(() => {
         api.get('/applications/curriculum')
             .then(res => {
-                console.log("Müfredat verisi:", res.data.data);
-                setCurriculum(res.data.data);
+                setCurriculum(res.data.data || []);
             })
-            .catch(err => console.error("Dersler yüklenemedi", err));
+            .catch(err => {
+                console.error("Dersler yüklenemedi:", err);
+            });
 
         api.get('/applications/my-latest')
             .then(res => {
@@ -46,7 +47,7 @@ const ExemptionForm = () => {
 
                 if (res.data.status === "success") {
                     const app = res.data.data.application;
-                    const mappings = res.data.data.mappings;
+                    const mappings = res.data.data.mappings || [];
                     const attachments = res.data.data.attachments || [];
 
                     setApplicationId(app.applicationid);
@@ -54,6 +55,7 @@ const ExemptionForm = () => {
                     setSubmittedApplication({
                         applicationId: app.applicationid,
                         status: app.status || 'Komisyona Gönderildi',
+
                         student: {
                             studentNo: app.studentno || app.studentnumber || '',
                             studentName: app.studentname || app.fullname || '',
@@ -62,23 +64,28 @@ const ExemptionForm = () => {
                             department: app.department || '',
                             program: app.program || ''
                         },
+
                         application: {
-                            academicYear: app.academicyear,
-                            semester: app.semester,
-                            exemptionReason: app.exemptionreason,
-                            sourceUniversity: app.sourceuniversity,
-                            sourceFaculty: app.sourcefaculty,
-                            sourceDepartment: app.sourcedepartment,
-                            intakeNote: app.intakenote
+                            academicYear: app.academicyear || '',
+                            semester: app.semester || '',
+                            exemptionReason: app.exemptionreason || '',
+                            sourceUniversity: app.sourceuniversity || '',
+                            sourceFaculty: app.sourcefaculty || '',
+                            sourceDepartment: app.sourcedepartment || '',
+                            intakeNote: app.intakenote || ''
                         },
+
                         mappings,
+
                         documents: {
                             attachments
                         },
+
                         totalTargetAkts: mappings.reduce(
                             (sum, item) => sum + (Number(item.targetCourse?.akts) || 0),
                             0
                         ),
+
                         totalTargetCredit: mappings.reduce(
                             (sum, item) => sum + (Number(item.targetCourse?.localcredit) || 0),
                             0
@@ -129,6 +136,36 @@ const ExemptionForm = () => {
         }
 
         return '';
+    };
+
+    const getDecisionText = (isApproved) => {
+        if (isApproved === true) return 'Onaylandı';
+        if (isApproved === false) return 'Reddedildi';
+        return 'Beklemede';
+    };
+
+    const getDecisionColor = (isApproved) => {
+        if (isApproved === true) return '#198754';
+        if (isApproved === false) return '#dc3545';
+        return '#856404';
+    };
+
+    const getOverallApplicationStatus = (mappings = []) => {
+        if (!mappings || mappings.length === 0) {
+            return 'Komisyona Gönderildi';
+        }
+
+        const allPending = mappings.every(m => m.isApproved === null || m.isApproved === undefined);
+        const allApproved = mappings.every(m => m.isApproved === true);
+        const allRejected = mappings.every(m => m.isApproved === false);
+        const hasDecision = mappings.some(m => m.isApproved === true || m.isApproved === false);
+
+        if (allPending) return 'Komisyon İncelemesinde';
+        if (allApproved) return 'Onaylandı';
+        if (allRejected) return 'Reddedildi';
+        if (hasDecision) return 'Kısmen Karar Verildi';
+
+        return 'Komisyona Gönderildi';
     };
 
     const getCleanCourseName = (courseName) => {
@@ -535,12 +572,24 @@ const ExemptionForm = () => {
 
                         <div style={{
                             padding: '15px',
-                            backgroundColor: '#e7f3ff',
-                            border: '1px solid #b6d4fe',
+                            backgroundColor:
+                                getOverallApplicationStatus(submittedApplication.mappings) === 'Onaylandı'
+                                    ? '#d1e7dd'
+                                    : getOverallApplicationStatus(submittedApplication.mappings) === 'Reddedildi'
+                                        ? '#f8d7da'
+                                        : '#e7f3ff',
+                            border:
+                                getOverallApplicationStatus(submittedApplication.mappings) === 'Onaylandı'
+                                    ? '1px solid #badbcc'
+                                    : getOverallApplicationStatus(submittedApplication.mappings) === 'Reddedildi'
+                                        ? '1px solid #f5c2c7'
+                                        : '1px solid #b6d4fe',
                             borderRadius: '6px',
-                            marginBottom: '15px'
+                            marginBottom: '15px',
+                            fontWeight: 'bold',
+                            fontSize: '16px'
                         }}>
-                            <strong>Güncel Durum:</strong> {submittedApplication.status}
+                            Güncel Durum: {getOverallApplicationStatus(submittedApplication.mappings)}
                         </div>
 
                         <div style={{
@@ -549,14 +598,78 @@ const ExemptionForm = () => {
                             gap: '10px',
                             textAlign: 'center'
                         }}>
-                            <div style={{ padding: '10px', background: '#d1e7dd', borderRadius: '6px' }}>
-                                1. Başvuru Gönderildi
+
+                            {/* 1 */}
+                            <div style={{
+                                padding: '10px',
+                                background:
+                                    submittedApplication
+                                        ? '#d1e7dd'
+                                        : '#f8f9fa',
+                                borderRadius: '6px',
+                                fontWeight: 'bold'
+                            }}>
+                                ✓ Başvuru Gönderildi
                             </div>
-                            <div style={{ padding: '10px', background: '#fff3cd', borderRadius: '6px' }}>
+
+                            {/* 2 */}
+                            <div style={{
+                                padding: '10px',
+                                background:
+                                    getOverallApplicationStatus(submittedApplication.mappings) === 'Komisyon İncelemesinde'
+                                        ? '#fff3cd'
+                                        : (
+                                            getOverallApplicationStatus(submittedApplication.mappings) === 'Onaylandı' ||
+                                            getOverallApplicationStatus(submittedApplication.mappings) === 'Reddedildi' ||
+                                            getOverallApplicationStatus(submittedApplication.mappings) === 'Kısmen Karar Verildi'
+                                        )
+                                            ? '#d1e7dd'
+                                            : '#f8f9fa',
+                                borderRadius: '6px',
+                                fontWeight: 'bold'
+                            }}>
                                 2. Komisyon İncelemesinde
                             </div>
-                            <div style={{ padding: '10px', background: '#f8f9fa', borderRadius: '6px' }}>
+
+                            {/* 3 */}
+                            <div style={{
+                                padding: '10px',
+                                background:
+                                    getOverallApplicationStatus(submittedApplication.mappings) === 'Kısmen Karar Verildi'
+                                        ? '#cff4fc'
+                                        : (
+                                            getOverallApplicationStatus(submittedApplication.mappings) === 'Onaylandı' ||
+                                            getOverallApplicationStatus(submittedApplication.mappings) === 'Reddedildi'
+                                        )
+                                            ? '#d1e7dd'
+                                            : '#f8f9fa',
+                                borderRadius: '6px',
+                                fontWeight: 'bold'
+                            }}>
                                 3. Karar Verildi
+                            </div>
+
+                            {/* 4 */}
+                            <div style={{
+                                padding: '10px',
+                                background:
+                                    getOverallApplicationStatus(submittedApplication.mappings) === 'Onaylandı'
+                                        ? '#d1e7dd'
+                                        : getOverallApplicationStatus(submittedApplication.mappings) === 'Reddedildi'
+                                            ? '#f8d7da'
+                                            : getOverallApplicationStatus(submittedApplication.mappings) === 'Kısmen Karar Verildi'
+                                                ? '#cff4fc'
+                                                : '#f8f9fa',
+                                borderRadius: '6px',
+                                fontWeight: 'bold'
+                            }}>
+                                {getOverallApplicationStatus(submittedApplication.mappings) === 'Onaylandı'
+                                    ? '✓ Onaylandı'
+                                    : getOverallApplicationStatus(submittedApplication.mappings) === 'Reddedildi'
+                                        ? '✗ Reddedildi'
+                                        : getOverallApplicationStatus(submittedApplication.mappings) === 'Kısmen Karar Verildi'
+                                            ? '◐ Kısmi Sonuç'
+                                            : '4. Nihai Sonuç'}
                             </div>
 
                         </div>
@@ -630,6 +743,9 @@ const ExemptionForm = () => {
                                     <th style={{ border: '1px solid #ddd', padding: '8px' }}>Hedef OMÜ Dersi</th>
                                     <th style={{ border: '1px solid #ddd', padding: '8px' }}>OMÜ Kredi</th>
                                     <th style={{ border: '1px solid #ddd', padding: '8px' }}>OMÜ AKTS</th>
+                                    <th style={{ border: '1px solid #ddd', padding: '8px' }}>OMÜ Harf Notu</th>
+                                    <th style={{ border: '1px solid #ddd', padding: '8px' }}>Karar</th>
+                                    <th style={{ border: '1px solid #ddd', padding: '8px' }}>Komisyon Açıklaması</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -667,6 +783,23 @@ const ExemptionForm = () => {
                                         </td>
                                         <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
                                             {mapping.targetCourse?.akts || '-'}
+                                        </td>
+                                        <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>
+                                            {mapping.finalGrade || '-'}
+                                        </td>
+
+                                        <td style={{
+                                            border: '1px solid #ddd',
+                                            padding: '8px',
+                                            textAlign: 'center',
+                                            fontWeight: 'bold',
+                                            color: getDecisionColor(mapping.isApproved)
+                                        }}>
+                                            {getDecisionText(mapping.isApproved)}
+                                        </td>
+
+                                        <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                                            {mapping.reviewNote || '-'}
                                         </td>
                                     </tr>
                                 ))}
