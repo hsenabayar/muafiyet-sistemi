@@ -150,22 +150,28 @@ const ExemptionForm = () => {
         return '#856404';
     };
 
-    const getOverallApplicationStatus = (mappings = []) => {
+    const getOverallApplicationStatus = (mappings = [], applicationStatus = '') => {
+        if (applicationStatus === 'Başvuru Sonuçlandı: Olumsuz') {
+            return 'Başvuru Sonuçlandı: Olumsuz';
+        }
+
+        if (applicationStatus === 'Başvuru Sonuçlandı: Olumlu') {
+            return 'Başvuru Sonuçlandı: Olumlu';
+        }
+
         if (!mappings || mappings.length === 0) {
             return 'Komisyona Gönderildi';
         }
 
-        const allPending = mappings.every(m => m.isApproved === null || m.isApproved === undefined);
-        const allApproved = mappings.every(m => m.isApproved === true);
-        const allRejected = mappings.every(m => m.isApproved === false);
-        const hasDecision = mappings.some(m => m.isApproved === true || m.isApproved === false);
+        const allPending = mappings.every(
+            m => m.isApproved === null || m.isApproved === undefined
+        );
 
-        if (allPending) return 'Komisyon İncelemesinde';
-        if (allApproved) return 'Onaylandı';
-        if (allRejected) return 'Reddedildi';
-        if (hasDecision) return 'Kısmen Karar Verildi';
+        if (allPending) {
+            return 'Komisyon İncelemesinde';
+        }
 
-        return 'Komisyona Gönderildi';
+        return 'Başvuru Sonuçlandı: Olumlu';
     };
 
     const getCleanCourseName = (courseName) => {
@@ -572,16 +578,16 @@ const ExemptionForm = () => {
 
                         <div style={{
                             padding: '15px',
-                            backgroundColor:
-                                getOverallApplicationStatus(submittedApplication.mappings) === 'Onaylandı'
-                                    ? '#d1e7dd'
-                                    : getOverallApplicationStatus(submittedApplication.mappings) === 'Reddedildi'
-                                        ? '#f8d7da'
-                                        : '#e7f3ff',
+                            backgroundColor: getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status)
+                                === 'Onaylandı'
+                                ? '#d1e7dd'
+                                : getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status) === 'Reddedildi'
+                                    ? '#f8d7da'
+                                    : '#e7f3ff',
                             border:
-                                getOverallApplicationStatus(submittedApplication.mappings) === 'Onaylandı'
+                                getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status) === 'Onaylandı'
                                     ? '1px solid #badbcc'
-                                    : getOverallApplicationStatus(submittedApplication.mappings) === 'Reddedildi'
+                                    : getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status) === 'Reddedildi'
                                         ? '1px solid #f5c2c7'
                                         : '1px solid #b6d4fe',
                             borderRadius: '6px',
@@ -589,12 +595,12 @@ const ExemptionForm = () => {
                             fontWeight: 'bold',
                             fontSize: '16px'
                         }}>
-                            Güncel Durum: {getOverallApplicationStatus(submittedApplication.mappings)}
+                            Güncel Durum: {getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status)}
                         </div>
 
                         <div style={{
                             display: 'grid',
-                            gridTemplateColumns: 'repeat(4, 1fr)',
+                            gridTemplateColumns: 'repeat(3, 1fr)',
                             gap: '10px',
                             textAlign: 'center'
                         }}>
@@ -616,12 +622,12 @@ const ExemptionForm = () => {
                             <div style={{
                                 padding: '10px',
                                 background:
-                                    getOverallApplicationStatus(submittedApplication.mappings) === 'Komisyon İncelemesinde'
+                                    getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status) === 'Komisyon İncelemesinde'
                                         ? '#fff3cd'
                                         : (
-                                            getOverallApplicationStatus(submittedApplication.mappings) === 'Onaylandı' ||
-                                            getOverallApplicationStatus(submittedApplication.mappings) === 'Reddedildi' ||
-                                            getOverallApplicationStatus(submittedApplication.mappings) === 'Kısmen Karar Verildi'
+                                            getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status) === 'Onaylandı' ||
+                                            getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status) === 'Reddedildi' ||
+                                            getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status) === 'Kısmen Karar Verildi'
                                         )
                                             ? '#d1e7dd'
                                             : '#f8f9fa',
@@ -635,42 +641,18 @@ const ExemptionForm = () => {
                             <div style={{
                                 padding: '10px',
                                 background:
-                                    getOverallApplicationStatus(submittedApplication.mappings) === 'Kısmen Karar Verildi'
-                                        ? '#cff4fc'
-                                        : (
-                                            getOverallApplicationStatus(submittedApplication.mappings) === 'Onaylandı' ||
-                                            getOverallApplicationStatus(submittedApplication.mappings) === 'Reddedildi'
-                                        )
-                                            ? '#d1e7dd'
+                                    getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status) === 'Başvuru Sonuçlandı: Olumlu'
+                                        ? '#d1e7dd'
+                                        : getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status) === 'Başvuru Sonuçlandı: Olumsuz'
+                                            ? '#f8d7da'
                                             : '#f8f9fa',
                                 borderRadius: '6px',
                                 fontWeight: 'bold'
                             }}>
-                                3. Karar Verildi
+                                {getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status)}
                             </div>
 
-                            {/* 4 */}
-                            <div style={{
-                                padding: '10px',
-                                background:
-                                    getOverallApplicationStatus(submittedApplication.mappings) === 'Onaylandı'
-                                        ? '#d1e7dd'
-                                        : getOverallApplicationStatus(submittedApplication.mappings) === 'Reddedildi'
-                                            ? '#f8d7da'
-                                            : getOverallApplicationStatus(submittedApplication.mappings) === 'Kısmen Karar Verildi'
-                                                ? '#cff4fc'
-                                                : '#f8f9fa',
-                                borderRadius: '6px',
-                                fontWeight: 'bold'
-                            }}>
-                                {getOverallApplicationStatus(submittedApplication.mappings) === 'Onaylandı'
-                                    ? '✓ Onaylandı'
-                                    : getOverallApplicationStatus(submittedApplication.mappings) === 'Reddedildi'
-                                        ? '✗ Reddedildi'
-                                        : getOverallApplicationStatus(submittedApplication.mappings) === 'Kısmen Karar Verildi'
-                                            ? '◐ Kısmi Sonuç'
-                                            : '4. Nihai Sonuç'}
-                            </div>
+
 
                         </div>
                     </div>
@@ -744,8 +726,7 @@ const ExemptionForm = () => {
                                     <th style={{ border: '1px solid #ddd', padding: '8px' }}>OMÜ Kredi</th>
                                     <th style={{ border: '1px solid #ddd', padding: '8px' }}>OMÜ AKTS</th>
                                     <th style={{ border: '1px solid #ddd', padding: '8px' }}>OMÜ Harf Notu</th>
-                                    <th style={{ border: '1px solid #ddd', padding: '8px' }}>Karar</th>
-                                    <th style={{ border: '1px solid #ddd', padding: '8px' }}>Komisyon Açıklaması</th>
+
                                 </tr>
                             </thead>
                             <tbody>
@@ -788,19 +769,7 @@ const ExemptionForm = () => {
                                             {mapping.finalGrade || '-'}
                                         </td>
 
-                                        <td style={{
-                                            border: '1px solid #ddd',
-                                            padding: '8px',
-                                            textAlign: 'center',
-                                            fontWeight: 'bold',
-                                            color: getDecisionColor(mapping.isApproved)
-                                        }}>
-                                            {getDecisionText(mapping.isApproved)}
-                                        </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '8px' }}>
-                                            {mapping.reviewNote || '-'}
-                                        </td>
                                     </tr>
                                 ))}
                             </tbody>

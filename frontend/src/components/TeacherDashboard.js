@@ -12,6 +12,8 @@ const TeacherDashboard = () => {
     // 🎯 Yeni: Hoca satırın içine doğrudan kaynak ders eklemek istediğinde açılacak panel state'i
     const [activeAddExternalRow, setActiveAddExternalRow] = useState(null);
     const [selectedReason, setSelectedReason] = useState('Tümü');
+    const [decisionEdits, setDecisionEdits] = useState({});
+    const [emptyMappingFormOpen, setEmptyMappingFormOpen] = useState(false);
 
     useEffect(() => {
         loadApplications();
@@ -96,8 +98,19 @@ const TeacherDashboard = () => {
             setDetailLoading(true);
 
             const res = await api.get(`/applications/commission/applications/${applicationId}`);
+            const data = res.data.data;
 
-            setSelectedApplication(res.data.data);
+            setSelectedApplication(data);
+
+            const initialEdits = {};
+            (data.mappings || []).forEach(mapping => {
+                initialEdits[mapping.decisionId] = {
+                    finalGrade: mapping.finalGrade || mapping.suggestedGrade || '',
+                    reviewNote: mapping.reviewNote || ''
+                };
+            });
+
+            setDecisionEdits(initialEdits);
             setDetailLoading(false);
         } catch (err) {
             console.error("Başvuru detayı alınamadı:", err);
@@ -119,6 +132,56 @@ const TeacherDashboard = () => {
             openDetail(selectedApplication.application.applicationid);
         } catch (err) {
             alert(err.response?.data?.message || "Karar kaydedilemedi.");
+        }
+    };
+
+    const handleDecisionEditChange = (decisionId, field, value) => {
+        setDecisionEdits(prev => ({
+            ...prev,
+            [decisionId]: {
+                ...prev[decisionId],
+                [field]: value
+            }
+        }));
+    };
+
+    const saveAllDecisions = async () => {
+        const mappings = selectedApplication?.mappings || [];
+
+        if (mappings.length === 0) {
+            alert("Kaydedilecek ders eşleştirmesi bulunmamaktadır.");
+            return;
+        }
+
+        for (const mapping of mappings) {
+            const edit = decisionEdits[mapping.decisionId];
+
+            if (!edit) continue;
+
+            if (!edit.finalGrade) {
+                alert("Lütfen tüm dersler için OMÜ harf notunu seçiniz.");
+                return;
+            }
+        }
+
+        try {
+            await Promise.all(
+                mappings.map(mapping => {
+                    const edit = decisionEdits[mapping.decisionId];
+
+                    return api.post('/applications/finalize-decision', {
+                        decisionId: mapping.decisionId,
+                        isApproved: true,
+                        finalGrade: edit.finalGrade,
+                        reviewNote: edit.reviewNote || 'Bölüm yetkilisi tarafından uygun görüldü.'
+                    });
+                })
+            );
+
+            alert("Tüm ders kararları başarıyla kaydedildi.");
+            openDetail(selectedApplication.application.applicationid);
+        } catch (err) {
+            alert(err.response?.data?.message || "Kararlar kaydedilemedi.");
         }
     };
 
@@ -196,29 +259,68 @@ const TeacherDashboard = () => {
         }
     };
 
+    const addNewMappingFromEmptyState = async () => {
+        const code = document.getElementById('new-ext-code').value;
+        const name = document.getElementById('new-ext-name').value;
+        const sourceCredit = document.getElementById('new-ext-credit').value;
+        const akts = document.getElementById('new-ext-akts').value;
+        const grade = document.getElementById('new-ext-grade').value;
+        const targetCourseId = document.getElementById('new-target-course').value;
+
+        if (!code || !name || !akts || !grade || !targetCourseId) {
+            alert("Lütfen kaynak ders ve hedef OMÜ ders bilgilerini doldurunuz.");
+            return;
+        }
+
+        try {
+            await api.post('/applications/commission/add-course-mapping', {
+                applicationId: selectedApplication.application.applicationid,
+                targetCourseId,
+                externalCourses: [
+                    { code, name, sourceCredit, akts, grade }
+                ]
+            });
+
+            alert("Yeni eşleşme eklendi.");
+            setEmptyMappingFormOpen(false);
+            openDetail(selectedApplication.application.applicationid);
+
+        } catch (err) {
+            alert(err.response?.data?.message || "Yeni eşleşme eklenemedi.");
+        }
+    };
+
     const getGroupedMappings = (rawMappings) => {
         const groups = {};
 
         rawMappings.forEach(mapping => {
-            const sortedExternalCodes = (mapping.externalCourses || [])
+            const externalCourses = mapping.externalCourses || [];
+
+            if (externalCourses.length === 0) return;
+
+            const sortedExternalCodes = externalCourses
                 .map(c => String(c.code || c.externalcoursecode || '').trim().toUpperCase())
                 .sort()
                 .join('-');
 
-            // Eğer mapping nesnesinde doğrudan benzersiz grup belirteci yoksa kaynak kod kombinasyonunu baz alıyoruz
             const groupKey = mapping.groupId || sortedExternalCodes;
 
             if (!groups[groupKey]) {
                 groups[groupKey] = {
                     groupId: groupKey,
-                    externalCourses: mapping.externalCourses || [],
+                    externalCourses,
                     decisions: []
                 };
             }
-            groups[groupKey].decisions.push(mapping);
+
+            if (mapping.targetCourse?.courseid) {
+                groups[groupKey].decisions.push(mapping);
+            } else if (groups[groupKey].decisions.length === 0) {
+                groups[groupKey].decisions.push(mapping);
+            }
         });
 
-        return Object.values(groups);
+        return Object.values(groups).filter(group => group.externalCourses.length > 0);
     };
 
     const reasonOptions = [
@@ -361,243 +463,433 @@ const TeacherDashboard = () => {
                         <h3>Ders Eşleştirmeleri</h3>
 
                         {rawMappings.length === 0 ? (
-                            <p>Ders eşleştirmesi bulunamadı.</p>
+                            <div>
+                                <p>Ders eşleştirmesi bulunamadı.</p>
+
+                                {!emptyMappingFormOpen ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setEmptyMappingFormOpen(true)}
+                                        style={primaryButton}
+                                    >
+                                        + Yeni Eşleşme Satırı Ekle
+                                    </button>
+                                ) : (
+                                    <div style={{
+                                        marginTop: '15px',
+                                        padding: '15px',
+                                        border: '1px solid #ddd',
+                                        borderRadius: '6px',
+                                        background: '#f8f9fa'
+                                    }}>
+                                        <input id="new-ext-code" placeholder="Kaynak Ders Kodu" style={{ margin: '5px', padding: '8px' }} />
+                                        <input id="new-ext-name" placeholder="Kaynak Ders Adı" style={{ margin: '5px', padding: '8px' }} />
+                                        <input id="new-ext-credit" type="number" placeholder="Kaynak Kredi" style={{ margin: '5px', padding: '8px' }} />
+                                        <input id="new-ext-akts" type="number" placeholder="Kaynak AKTS" style={{ margin: '5px', padding: '8px' }} />
+                                        <input id="new-ext-grade" placeholder="Harf Notu" style={{ margin: '5px', padding: '8px' }} />
+
+                                        <select id="new-target-course" style={{ margin: '5px', padding: '8px', width: '100%' }}>
+                                            <option value="">Hedef OMÜ dersi seç...</option>
+                                            {Object.keys(groupedCurriculum).map(groupName => (
+                                                <optgroup key={groupName} label={groupName}>
+                                                    {groupedCurriculum[groupName].map(c => (
+                                                        <option key={c.courseid} value={c.courseid}>
+                                                            [{c.coursecode}] {getCleanCourseName(c.coursename)} - Kredi: {c.localcredit || '-'} - {c.akts} AKTS
+                                                        </option>
+                                                    ))}
+                                                </optgroup>
+                                            ))}
+                                        </select>
+
+                                        <button type="button" onClick={addNewMappingFromEmptyState} style={primaryButton}>
+                                            Kaydet
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setEmptyMappingFormOpen(false)}
+                                            style={{ ...secondaryButton, marginLeft: '10px' }}
+                                        >
+                                            İptal
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         ) : (
-                            <table style={tableStyle}>
-                                <thead>
-                                    <tr style={{ background: '#f1f1f1' }}>
-                                        <th style={thStyle}>#</th>
-                                        <th style={thStyle}>Kaynak Ders</th>
-                                        <th style={thStyle}>Kaynak Kredi</th>
-                                        <th style={thStyle}>Kaynak AKTS</th>
-                                        <th style={thStyle}>Harf Notu</th>
-                                        <th style={thStyle}>Hedef OMÜ Dersi</th>
-                                        <th style={thStyle}>OMÜ Kredi</th>
-                                        <th style={thStyle}>OMÜ AKTS</th>
-                                        <th style={thStyle}>OMÜ Harf Notu</th>
-                                        <th style={thStyle}>İşlem</th>
-                                    </tr>
-                                </thead>
+                            <>
+                                <table style={tableStyle}>
+                                    <thead>
+                                        <tr style={{ background: '#f1f1f1' }}>
+                                            <th style={thStyle}>#</th>
+                                            <th style={thStyle}>Kaynak Ders</th>
+                                            <th style={thStyle}>Kaynak Kredi</th>
+                                            <th style={thStyle}>Kaynak AKTS</th>
+                                            <th style={thStyle}>Harf Notu</th>
+                                            <th style={thStyle}>Hedef OMÜ Dersi</th>
+                                            <th style={thStyle}>OMÜ Kredi</th>
+                                            <th style={thStyle}>OMÜ AKTS</th>
+                                            <th style={thStyle}>OMÜ Harf Notu</th>
+                                        </tr>
+                                    </thead>
 
-                                <tbody>
-                                    {structuredGroups.map((group, groupIndex) => {
-                                        const totalRowsInGroup = group.decisions.length;
+                                    <tbody>
+                                        {structuredGroups.map((group, groupIndex) => {
+                                            const totalRowsInGroup = group.decisions.length;
 
-                                        return group.decisions.map((mapping, rowIndex) => (
-                                            <tr key={`${groupIndex}-${rowIndex}`}>
+                                            return group.decisions.map((mapping, rowIndex) => (
+                                                <tr key={`${groupIndex}-${rowIndex}`}>
 
-                                                {/* SIRA NUMARASI */}
-                                                {rowIndex === 0 && (
-                                                    <td rowSpan={totalRowsInGroup} style={{ ...tdStyle, verticalAlign: 'middle', textAlign: 'center', background: '#fafafa' }}>
-                                                        {groupIndex + 1}
-                                                    </td>
-                                                )}
+                                                    {/* SIRA NUMARASI */}
+                                                    {rowIndex === 0 && (
+                                                        <td rowSpan={totalRowsInGroup} style={{ ...tdStyle, verticalAlign: 'middle', textAlign: 'center', background: '#fafafa' }}>
+                                                            {groupIndex + 1}
+                                                        </td>
+                                                    )}
 
-                                                {/* 🛠️ SOL TARAF: FAKÜLTE YETKİLİSİNİN DERS EKLEYİP SİLEBİLECEĞİ DİNAMİK KAYNAK DERS ALANI */}
-                                                {rowIndex === 0 && (
-                                                    <>
-                                                        <td rowSpan={totalRowsInGroup} style={{ ...tdStyle, verticalAlign: 'middle' }}>
-                                                            {group.externalCourses.map((course, i) => (
-                                                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', padding: '4px', borderBottom: '1px dashed #eee' }}>
-                                                                    <span><b>{course.code || course.externalcoursecode}</b> - {course.name || course.externalcoursename}</span>
+                                                    {/* 🛠️ SOL TARAF: FAKÜLTE YETKİLİSİNİN DERS EKLEYİP SİLEBİLECEĞİ DİNAMİK KAYNAK DERS ALANI */}
+                                                    {rowIndex === 0 && (
+                                                        <>
+                                                            <td rowSpan={totalRowsInGroup} style={{ ...tdStyle, verticalAlign: 'middle' }}>
+                                                                {group.externalCourses.map((course, i) => (
+                                                                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', padding: '4px', borderBottom: '1px dashed #eee' }}>
+                                                                        <span><b>{course.code || course.externalcoursecode}</b> - {course.name || course.externalcoursename}</span>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => deleteExternalCourseFromGroup(course.extCourseId || course.extcourseid)}
+                                                                            style={{ background: '#dc3545', color: 'white', border: 'none', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}
+                                                                        >
+                                                                            Sil
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+
+                                                                {/* Hoca satır içi kaynak ders eklemek isterse */}
+                                                                {activeAddExternalRow === groupIndex ? (
+                                                                    <div style={{ background: '#f8f9fa', padding: '6px', borderRadius: '4px', marginTop: '8px', border: '1px solid #ddd' }}>
+                                                                        <input id={`ext-code-${groupIndex}`} placeholder="Kod (MAT101)" style={{ width: '100%', marginBottom: '4px', padding: '4px' }} />
+                                                                        <input id={`ext-name-${groupIndex}`} placeholder="Ders Adı" style={{ width: '100%', marginBottom: '4px', padding: '4px' }} />
+                                                                        <input id={`ext-credit-${groupIndex}`} type="number" placeholder="Kredi" style={{ width: '100%', marginBottom: '4px', padding: '4px' }} />
+                                                                        <input id={`ext-akts-${groupIndex}`} type="number" placeholder="AKTS" style={{ width: '100%', marginBottom: '4px', padding: '4px' }} />
+                                                                        <input id={`ext-grade-${groupIndex}`} placeholder="Harf Notu (AA)" style={{ width: '100%', marginBottom: '6px', padding: '4px' }} />
+                                                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                                                            <button type="button" style={{ ...primaryButton, backgroundColor: '#198754', padding: '2px 6px', fontSize: '11px' }} onClick={() => {
+                                                                                const code = document.getElementById(`ext-code-${groupIndex}`).value;
+                                                                                const name = document.getElementById(`ext-name-${groupIndex}`).value;
+                                                                                const sourceCredit = document.getElementById(`ext-credit-${groupIndex}`).value;
+                                                                                const akts = document.getElementById(`ext-akts-${groupIndex}`).value;
+                                                                                const grade = document.getElementById(`ext-grade-${groupIndex}`).value;
+                                                                                addExternalCourseToGroup(app.applicationid, mapping.targetCourse?.courseid, { code, name, sourceCredit, akts, grade });
+                                                                            }}>Ekle</button>
+                                                                            <button type="button" style={{ ...secondaryButton, marginBottom: 0, padding: '2px 6px', fontSize: '11px' }} onClick={() => setActiveAddExternalRow(null)}>İptal</button>
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <button type="button" style={{ ...primaryButton, backgroundColor: '#6c757d', width: '100%', marginTop: '5px', fontSize: '11px', padding: '3px' }} onClick={() => setActiveAddExternalRow(groupIndex)}>
+                                                                        + Farklı Kaynak Ders Ekle
+                                                                    </button>
+                                                                )}
+                                                            </td>
+                                                            <td rowSpan={totalRowsInGroup} style={{ ...tdStyle, textAlign: 'center', verticalAlign: 'middle' }}>
+                                                                {group.externalCourses.map((course, i) => (
+                                                                    <div key={i} style={{ height: '24px' }}>{course.sourceCredit || course.externalcredit || '-'}</div>
+                                                                ))}
+                                                            </td>
+                                                            <td rowSpan={totalRowsInGroup} style={{ ...tdStyle, textAlign: 'center', verticalAlign: 'middle' }}>
+                                                                {group.externalCourses.map((course, i) => (
+                                                                    <div key={i} style={{ height: '24px' }}>{course.akts || course.externalakts || '-'}</div>
+                                                                ))}
+                                                            </td>
+                                                            <td rowSpan={totalRowsInGroup} style={{ ...tdStyle, textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold' }}>
+                                                                {group.externalCourses.map((course, i) => (
+                                                                    <div key={i} style={{ height: '24px' }}>{course.grade || course.externalgrade || '-'}</div>
+                                                                ))}
+                                                            </td>
+                                                        </>
+                                                    )}
+
+                                                    {/* SAĞ TARAF: HEDEF OMÜ DERSLERİ VE KONTROL ALANLARI */}
+                                                    <td style={{ ...tdStyle, verticalAlign: 'middle' }}>
+                                                        {mapping.targetCourse?.courseid ? (
+                                                            <>
+                                                                <select
+                                                                    id={`target-${mapping.decisionId}`}
+                                                                    defaultValue={mapping.targetCourse?.courseid}
+                                                                    style={{ padding: '6px', width: '100%' }}
+                                                                >
+                                                                    {Object.keys(groupedCurriculum).map(groupName => (
+                                                                        <optgroup key={groupName} label={groupName}>
+                                                                            {groupedCurriculum[groupName].map(c => (
+                                                                                <option key={c.courseid} value={c.courseid}>
+                                                                                    [{c.coursecode}] {getCleanCourseName(c.coursename)} - Kredi: {c.localcredit || '-'} - {c.akts} AKTS
+                                                                                </option>
+                                                                            ))}
+                                                                        </optgroup>
+                                                                    ))}
+                                                                </select>
+
+                                                                <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
                                                                     <button
                                                                         type="button"
-                                                                        onClick={() => deleteExternalCourseFromGroup(course.extCourseId || course.extcourseid)}
-                                                                        style={{ background: '#dc3545', color: 'white', border: 'none', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}
+                                                                        style={{ ...primaryButton, flex: 2, fontSize: '11px', padding: '4px' }}
+                                                                        onClick={() => {
+                                                                            const selectedTargetId = document.getElementById(`target-${mapping.decisionId}`).value;
+                                                                            updateTargetCourse(mapping.decisionId, selectedTargetId);
+                                                                        }}
                                                                     >
-                                                                        Sil
+                                                                        Güncelle
+                                                                    </button>
+
+                                                                    <button
+                                                                        type="button"
+                                                                        style={{ ...primaryButton, backgroundColor: '#dc3545', flex: 1, fontSize: '11px', padding: '4px' }}
+                                                                        onClick={() => deleteTargetCourseDecision(mapping.decisionId || mapping.decisionid)}
+                                                                    >
+                                                                        Kaldır
                                                                     </button>
                                                                 </div>
-                                                            ))}
+                                                            </>
+                                                        ) : (
+                                                            <></>
+                                                        )}
 
-                                                            {/* Hoca satır içi kaynak ders eklemek isterse */}
-                                                            {activeAddExternalRow === groupIndex ? (
-                                                                <div style={{ background: '#f8f9fa', padding: '6px', borderRadius: '4px', marginTop: '8px', border: '1px solid #ddd' }}>
-                                                                    <input id={`ext-code-${groupIndex}`} placeholder="Kod (MAT101)" style={{ width: '100%', marginBottom: '4px', padding: '4px' }} />
-                                                                    <input id={`ext-name-${groupIndex}`} placeholder="Ders Adı" style={{ width: '100%', marginBottom: '4px', padding: '4px' }} />
-                                                                    <input id={`ext-credit-${groupIndex}`} type="number" placeholder="Kredi" style={{ width: '100%', marginBottom: '4px', padding: '4px' }} />
-                                                                    <input id={`ext-akts-${groupIndex}`} type="number" placeholder="AKTS" style={{ width: '100%', marginBottom: '4px', padding: '4px' }} />
-                                                                    <input id={`ext-grade-${groupIndex}`} placeholder="Harf Notu (AA)" style={{ width: '100%', marginBottom: '6px', padding: '4px' }} />
-                                                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                                                        <button type="button" style={{ ...primaryButton, backgroundColor: '#198754', padding: '2px 6px', fontSize: '11px' }} onClick={() => {
-                                                                            const code = document.getElementById(`ext-code-${groupIndex}`).value;
-                                                                            const name = document.getElementById(`ext-name-${groupIndex}`).value;
-                                                                            const sourceCredit = document.getElementById(`ext-credit-${groupIndex}`).value;
-                                                                            const akts = document.getElementById(`ext-akts-${groupIndex}`).value;
-                                                                            const grade = document.getElementById(`ext-grade-${groupIndex}`).value;
-                                                                            addExternalCourseToGroup(app.applicationid, mapping.targetCourse?.courseid, { code, name, sourceCredit, akts, grade });
-                                                                        }}>Ekle</button>
-                                                                        <button type="button" style={{ ...secondaryButton, marginBottom: 0, padding: '2px 6px', fontSize: '11px' }} onClick={() => setActiveAddExternalRow(null)}>İptal</button>
+                                                        {rowIndex === totalRowsInGroup - 1 && (
+                                                            <div style={{ marginTop: '12px', borderTop: '2px dashed #004a99', paddingTop: '10px' }}>
+                                                                {activeAddRow === groupIndex ? (
+                                                                    <div style={{ background: '#f8f9fa', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}>
+                                                                        <select
+                                                                            id={`extra-target-${mapping.decisionId}`}
+                                                                            style={{ padding: '6px', width: '100%', marginBottom: '6px' }}
+                                                                            defaultValue=""
+                                                                        >
+                                                                            <option value="">OMÜ dersi seç...</option>
+
+                                                                            {Object.keys(groupedCurriculum).map(groupName => (
+                                                                                <optgroup key={groupName} label={groupName}>
+                                                                                    {groupedCurriculum[groupName].map(c => (
+                                                                                        <option key={c.courseid} value={c.courseid}>
+                                                                                            [{c.coursecode}] {getCleanCourseName(c.coursename)} - {c.akts} AKTS
+                                                                                        </option>
+                                                                                    ))}
+                                                                                </optgroup>
+                                                                            ))}
+                                                                        </select>
+
+                                                                        <div style={{ display: 'flex', gap: '6px' }}>
+                                                                            <button
+                                                                                type="button"
+                                                                                style={{ ...primaryButton, backgroundColor: '#198754', flex: 1 }}
+                                                                                onClick={() => {
+                                                                                    const extraTargetId = document.getElementById(`extra-target-${mapping.decisionId}`).value;
+                                                                                    addExtraTargetCourse(mapping.decisionId, extraTargetId);
+                                                                                }}
+                                                                            >
+                                                                                Ekle
+                                                                            </button>
+
+                                                                            <button
+                                                                                type="button"
+                                                                                style={{ ...secondaryButton, marginBottom: 0, padding: '4px 8px', fontSize: '12px' }}
+                                                                                onClick={() => setActiveAddRow(null)}
+                                                                            >
+                                                                                İptal
+                                                                            </button>
+                                                                        </div>
                                                                     </div>
-                                                                </div>
-                                                            ) : (
-                                                                <button type="button" style={{ ...primaryButton, backgroundColor: '#6c757d', width: '100%', marginTop: '5px', fontSize: '11px', padding: '3px' }} onClick={() => setActiveAddExternalRow(groupIndex)}>
-                                                                    + Farklı Kaynak Ders Ekle
-                                                                </button>
-                                                            )}
-                                                        </td>
-                                                        <td rowSpan={totalRowsInGroup} style={{ ...tdStyle, textAlign: 'center', verticalAlign: 'middle' }}>
-                                                            {group.externalCourses.map((course, i) => (
-                                                                <div key={i} style={{ height: '24px' }}>{course.sourceCredit || course.externalcredit || '-'}</div>
-                                                            ))}
-                                                        </td>
-                                                        <td rowSpan={totalRowsInGroup} style={{ ...tdStyle, textAlign: 'center', verticalAlign: 'middle' }}>
-                                                            {group.externalCourses.map((course, i) => (
-                                                                <div key={i} style={{ height: '24px' }}>{course.akts || course.externalakts || '-'}</div>
-                                                            ))}
-                                                        </td>
-                                                        <td rowSpan={totalRowsInGroup} style={{ ...tdStyle, textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold' }}>
-                                                            {group.externalCourses.map((course, i) => (
-                                                                <div key={i} style={{ height: '24px' }}>{course.grade || course.externalgrade || '-'}</div>
-                                                            ))}
-                                                        </td>
-                                                    </>
-                                                )}
-
-                                                {/* SAĞ TARAF: HEDEF OMÜ DERSLERİ VE KONTROL ALANLARI */}
-                                                <td style={{ ...tdStyle, verticalAlign: 'middle' }}>
-                                                    <select
-                                                        id={`target-${mapping.decisionId}`}
-                                                        defaultValue={mapping.targetCourse?.courseid}
-                                                        style={{ padding: '6px', width: '100%' }}
-                                                    >
-                                                        {Object.keys(groupedCurriculum).map(groupName => (
-                                                            <optgroup key={groupName} label={groupName}>
-                                                                {groupedCurriculum[groupName].map(c => (
-                                                                    <option key={c.courseid} value={c.courseid}>
-                                                                        [{c.coursecode}] {getCleanCourseName(c.coursename)} - Kredi: {c.localcredit || '-'} - {c.akts} AKTS
-                                                                    </option>
-                                                                ))}
-                                                            </optgroup>
-                                                        ))}
-                                                    </select>
-
-                                                    <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
-                                                        <button
-                                                            type="button"
-                                                            style={{ ...primaryButton, flex: 2, fontSize: '11px', padding: '4px' }}
-                                                            onClick={() => {
-                                                                const selectedTargetId = document.getElementById(`target-${mapping.decisionId}`).value;
-                                                                updateTargetCourse(mapping.decisionId, selectedTargetId);
-                                                            }}
-                                                        >
-                                                            Güncelle
-                                                        </button>
-                                                        {/* 🎯 Yeni: Hedef OMÜ Dersini Tamamen Silme Butonu */}
-                                                        <button
-                                                            type="button"
-                                                            style={{ ...primaryButton, backgroundColor: '#dc3545', flex: 1, fontSize: '11px', padding: '4px' }}
-                                                            onClick={() => deleteTargetCourseDecision(mapping.decisionId || mapping.decisionid)}
-                                                        >
-                                                            Kaldır
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Yeni OMÜ Dersi Ekleme Paneli her zaman grubun en altında sabit kalır */}
-                                                    {rowIndex === totalRowsInGroup - 1 && (
-                                                        <div style={{ marginTop: '12px', borderTop: '2px dashed #004a99', paddingTop: '10px' }}>
-                                                            {activeAddRow === groupIndex ? (
-                                                                <div style={{ background: '#f8f9fa', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}>
-                                                                    <select
-                                                                        id={`extra-target-${mapping.decisionId}`}
-                                                                        style={{ padding: '6px', width: '100%', marginBottom: '6px' }}
-                                                                        defaultValue=""
+                                                                ) : (
+                                                                    <button
+                                                                        type="button"
+                                                                        style={{ ...primaryButton, backgroundColor: '#198754', width: '100%', fontWeight: 'bold' }}
+                                                                        onClick={() => setActiveAddRow(groupIndex)}
                                                                     >
-                                                                        <option value="">Ek OMÜ dersi seç...</option>
-                                                                        {Object.keys(groupedCurriculum).map(groupName => (
-                                                                            <optgroup key={groupName} label={groupName}>
-                                                                                {groupedCurriculum[groupName].map(c => (
-                                                                                    <option key={c.courseid} value={c.courseid}>
-                                                                                        [{c.coursecode}] {getCleanCourseName(c.coursename)} - {c.akts} AKTS
-                                                                                    </option>
-                                                                                ))}
-                                                                            </optgroup>
-                                                                        ))}
-                                                                    </select>
+                                                                        + Yeni OMÜ Dersi Ekle
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </td>
 
-                                                                    <div style={{ display: 'flex', gap: '6px' }}>
-                                                                        <button
-                                                                            type="button"
-                                                                            style={{ ...primaryButton, backgroundColor: '#198754', flex: 1 }}
-                                                                            onClick={() => {
-                                                                                const extraTargetId = document.getElementById(`extra-target-${mapping.decisionId}`).value;
-                                                                                addExtraTargetCourse(mapping.decisionId, extraTargetId);
-                                                                            }}
-                                                                        >
-                                                                            Ekle
-                                                                        </button>
-                                                                        <button
-                                                                            type="button"
-                                                                            style={{ ...secondaryButton, marginBottom: 0, padding: '4px 8px', fontSize: '12px' }}
-                                                                            onClick={() => setActiveAddRow(null)}
-                                                                        >
-                                                                            İptal
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                <button
-                                                                    type="button"
-                                                                    style={{ ...primaryButton, backgroundColor: '#198754', width: '100%', fontWeight: 'bold' }}
-                                                                    onClick={() => setActiveAddRow(groupIndex)}
+                                                    <td style={{ ...tdStyle, textAlign: 'center', verticalAlign: 'middle' }}>
+                                                        {mapping.targetCourse?.localcredit || '-'}
+                                                    </td>
+
+                                                    <td style={{ ...tdStyle, textAlign: 'center', verticalAlign: 'middle' }}>
+                                                        {mapping.targetCourse?.akts || '-'}
+                                                    </td>
+
+                                                    <td style={{ ...tdStyle, verticalAlign: 'middle' }}>
+                                                        {mapping.targetCourse?.courseid ? (
+                                                            <>
+                                                                <select
+                                                                    value={decisionEdits[mapping.decisionId]?.finalGrade || ''}
+                                                                    onChange={(e) =>
+                                                                        handleDecisionEditChange(mapping.decisionId, 'finalGrade', e.target.value)
+                                                                    }
+                                                                    style={{ padding: '6px', width: '100%' }}
                                                                 >
-                                                                    + Yeni OMÜ Dersi Ekle
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </td>
+                                                                    <option value="">Not Seç</option>
+                                                                    <option value="AA">AA</option>
+                                                                    <option value="BA">BA</option>
+                                                                    <option value="BB">BB</option>
+                                                                    <option value="CB">CB</option>
+                                                                    <option value="CC">CC</option>
+                                                                    <option value="DC">DC</option>
+                                                                    <option value="DD">DD</option>
+                                                                    <option value="FF">FF</option>
+                                                                </select>
 
-                                                <td style={{ ...tdStyle, textAlign: 'center', verticalAlign: 'middle' }}>
-                                                    {mapping.targetCourse?.localcredit || '-'}
-                                                </td>
-
-                                                <td style={{ ...tdStyle, textAlign: 'center', verticalAlign: 'middle' }}>
-                                                    {mapping.targetCourse?.akts || '-'}
-                                                </td>
-
-                                                <td style={{ ...tdStyle, verticalAlign: 'middle' }}>
-                                                    <select
-                                                        defaultValue={mapping.finalGrade || mapping.suggestedGrade || ''}
-                                                        id={`grade-${mapping.decisionId}`}
-                                                        style={{ padding: '6px', width: '100%' }}
-                                                    >
-                                                        <option value="">Not Seç</option>
-                                                        <option value="AA">AA</option><option value="BA">BA</option>
-                                                        <option value="BB">BB</option><option value="CB">CB</option>
-                                                        <option value="CC">CC</option><option value="DC">DC</option>
-                                                        <option value="DD">DD</option><option value="FF">FF</option>
-                                                    </select>
-                                                    <div style={{ marginTop: '5px', fontSize: '12px', color: '#666' }}>
-                                                        Sistem önerisi: {mapping.suggestedGrade || '-'}
-                                                    </div>
-                                                </td>
+                                                                <div style={{ marginTop: '5px', fontSize: '12px', color: '#666' }}>
+                                                                    Sistem önerisi: {mapping.suggestedGrade || '-'}
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <span style={{ color: '#999' }}>-</span>
+                                                        )}
+                                                    </td>
 
 
 
-                                                <td style={{ ...tdStyle, verticalAlign: 'middle' }}>
-                                                    <button
-                                                        type="button"
-                                                        style={primaryButton}
-                                                        onClick={() => {
-                                                            const finalGrade = document.getElementById(`grade-${mapping.decisionId}`).value;
-                                                            const approveValue = document.getElementById(`approve-${mapping.decisionId}`).value;
-                                                            const reviewNote = document.getElementById(`note-${mapping.decisionId}`).value;
 
-                                                            if (!finalGrade) { alert("Lütfen OMÜ harf notunu seçiniz."); return; }
-                                                            if (approveValue === '') { alert("Lütfen karar seçiniz."); return; }
 
-                                                            updateDecision(mapping.decisionId, approveValue === 'true', finalGrade, reviewNote);
-                                                        }}
-                                                    >
-                                                        Kaydet
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ));
-                                    })}
-                                </tbody>
-                            </table>
+
+                                                </tr>
+                                            ));
+                                        })}
+                                    </tbody>
+                                </table>
+
+                                <div style={{
+                                    marginTop: '20px',
+                                    padding: '15px',
+                                    border: '1px dashed #004a99',
+                                    borderRadius: '6px',
+                                    background: '#f8f9fa'
+                                }}>
+                                    {!emptyMappingFormOpen ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => setEmptyMappingFormOpen(true)}
+                                            style={{
+                                                ...primaryButton,
+                                                backgroundColor: '#198754'
+                                            }}
+                                        >
+                                            + Yeni Eşleşme Satırı Ekle
+                                        </button>
+                                    ) : (
+                                        <div>
+                                            <div style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: '1fr 2fr 1fr 1fr 1fr',
+                                                gap: '8px',
+                                                marginBottom: '10px'
+                                            }}>
+                                                <input
+                                                    id="new-ext-code"
+                                                    placeholder="Kaynak Ders Kodu"
+                                                    style={{ padding: '8px' }}
+                                                />
+
+                                                <input
+                                                    id="new-ext-name"
+                                                    placeholder="Kaynak Ders Adı"
+                                                    style={{ padding: '8px' }}
+                                                />
+
+                                                <input
+                                                    id="new-ext-credit"
+                                                    type="number"
+                                                    placeholder="Kaynak Kredi"
+                                                    style={{ padding: '8px' }}
+                                                />
+
+                                                <input
+                                                    id="new-ext-akts"
+                                                    type="number"
+                                                    placeholder="Kaynak AKTS"
+                                                    style={{ padding: '8px' }}
+                                                />
+
+                                                <select
+                                                    id="new-ext-grade"
+                                                    defaultValue=""
+                                                    style={{ padding: '8px' }}
+                                                >
+                                                    <option value="">Harf Notu</option>
+                                                    <option value="AA">AA</option>
+                                                    <option value="BA">BA</option>
+                                                    <option value="BB">BB</option>
+                                                    <option value="CB">CB</option>
+                                                    <option value="CC">CC</option>
+                                                    <option value="DC">DC</option>
+                                                    <option value="DD">DD</option>
+                                                    <option value="FF">FF</option>
+                                                </select>
+                                            </div>
+
+                                            <select
+                                                id="new-target-course"
+                                                style={{
+                                                    padding: '8px',
+                                                    width: '100%',
+                                                    marginBottom: '10px'
+                                                }}
+                                                defaultValue=""
+                                            >
+                                                <option value="">Hedef OMÜ dersi seç...</option>
+
+                                                {Object.keys(groupedCurriculum).map(groupName => (
+                                                    <optgroup key={groupName} label={groupName}>
+                                                        {groupedCurriculum[groupName].map(c => (
+                                                            <option key={c.courseid} value={c.courseid}>
+                                                                [{c.coursecode}] {getCleanCourseName(c.coursename)} - Kredi: {c.localcredit || '-'} - {c.akts} AKTS
+                                                            </option>
+                                                        ))}
+                                                    </optgroup>
+                                                ))}
+                                            </select>
+
+                                            <button
+                                                type="button"
+                                                onClick={addNewMappingFromEmptyState}
+                                                style={{
+                                                    ...primaryButton,
+                                                    backgroundColor: '#198754',
+                                                    marginRight: '8px'
+                                                }}
+                                            >
+                                                Eşleşmeyi Ekle
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => setEmptyMappingFormOpen(false)}
+                                                style={secondaryButton}
+                                            >
+                                                İptal
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div style={{ marginTop: '20px', textAlign: 'right' }}>
+                                    <button
+                                        type="button"
+                                        onClick={saveAllDecisions}
+                                        style={{
+                                            padding: '12px 22px',
+                                            backgroundColor: '#198754',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer',
+                                            fontWeight: 'bold'
+                                        }}
+                                    >
+                                        Tüm Kararları Kaydet
+                                    </button>
+                                </div>
+                            </>
+
                         )}
                     </div>
                 </div>

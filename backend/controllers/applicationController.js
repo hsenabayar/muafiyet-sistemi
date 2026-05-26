@@ -673,7 +673,7 @@ exports.getApplicationDetailForCommission = async (req, res) => {
                 ed.IsApproved,
                 ed.ReviewNote
              FROM ExemptionDecisions ed
-             JOIN Curriculum c ON ed.TargetCourseID = c.CourseID
+             LEFT JOIN Curriculum c ON ed.TargetCourseID = c.CourseID
              WHERE ed.ApplicationID = $1
              ORDER BY ed.DecisionID ASC`,
             [id]
@@ -754,17 +754,44 @@ exports.updateDecisionTargetCourse = async (req, res) => {
     const { decisionId, targetCourseId } = req.body;
 
     try {
+        const decisionResult = await db.query(
+            `SELECT ApplicationID
+             FROM ExemptionDecisions
+             WHERE DecisionID = $1`,
+            [decisionId]
+        );
+
+        if (decisionResult.rows.length === 0) {
+            return res.status(404).json({
+                status: "error",
+                message: "Karar kaydı bulunamadı."
+            });
+        }
+
+        const applicationId = decisionResult.rows[0].applicationid;
+
         await db.query(
             `UPDATE ExemptionDecisions
-             SET TargetCourseID = $1
+             SET TargetCourseID = $1,
+                 IsApproved = NULL,
+                 FinalGrade = NULL,
+                 ReviewNote = NULL
              WHERE DecisionID = $2`,
             [targetCourseId, decisionId]
+        );
+
+        await db.query(
+            `UPDATE Applications
+             SET Status = 'Başvuru Sonuçlandı: Olumlu'
+             WHERE ApplicationID = $1`,
+            [applicationId]
         );
 
         res.json({
             status: "success",
             message: "Hedef OMÜ dersi güncellendi."
         });
+
     } catch (err) {
         res.status(500).json({
             status: "error",
@@ -833,6 +860,13 @@ exports.addExtraTargetCourseForDecision = async (req, res) => {
             );
         }
 
+        await db.query(
+            `UPDATE Applications
+     SET Status = 'Başvuru Sonuçlandı: Olumlu'
+     WHERE ApplicationID = $1`,
+            [applicationId]
+        );
+
         res.json({
             status: "success",
             message: "Aynı kaynak derslerle yeni OMÜ dersi eklendi.",
@@ -852,30 +886,57 @@ exports.deleteDecision = async (req, res) => {
     const { decisionId } = req.params;
 
     try {
-
-        // Önce bağlı detay kayıtlarını sil
-        await db.query(
-            `DELETE FROM DecisionDetails
+        const decisionResult = await db.query(
+            `SELECT ApplicationID
+             FROM ExemptionDecisions
              WHERE DecisionID = $1`,
             [decisionId]
         );
 
-        // Sonra karar kaydını sil
+        if (decisionResult.rows.length === 0) {
+            return res.status(404).json({
+                status: "error",
+                message: "Karar kaydı bulunamadı."
+            });
+        }
+
+        const applicationId = decisionResult.rows[0].applicationid;
+
+        // Kararı silmiyoruz, sadece hedef OMÜ dersini kaldırıyoruz
         await db.query(
-            `DELETE FROM ExemptionDecisions
+            `UPDATE ExemptionDecisions
+             SET TargetCourseID = NULL,
+                 IsApproved = NULL,
+                 FinalGrade = NULL,
+                 ReviewNote = NULL
              WHERE DecisionID = $1`,
             [decisionId]
         );
+
+        const remainingTargetCourses = await db.query(
+            `SELECT COUNT(*) AS count
+             FROM ExemptionDecisions
+             WHERE ApplicationID = $1
+             AND TargetCourseID IS NOT NULL`,
+            [applicationId]
+        );
+
+        if (Number(remainingTargetCourses.rows[0].count) === 0) {
+            await db.query(
+                `UPDATE Applications
+                 SET Status = 'Başvuru Sonuçlandı: Olumsuz'
+                 WHERE ApplicationID = $1`,
+                [applicationId]
+            );
+        }
 
         res.json({
             status: "success",
-            message: "Hedef OMÜ dersi silindi."
+            message: "Hedef OMÜ dersi kaldırıldı, kaynak ders korundu."
         });
 
     } catch (err) {
-
         console.error(err);
-
         res.status(500).json({
             status: "error",
             message: err.message
@@ -888,19 +949,73 @@ exports.deleteExternalCourseFromApplication = async (req, res) => {
     const { extCourseId } = req.params;
 
     try {
-        // Önce bu kaynak derse bağlı DecisionDetails kayıtlarını sil
+        const infoResult = await db.query(
+            `SELECT 
+                ec.ApplicationID,
+                dd.DecisionID
+             FROM ExternalCourses ec
+             LEFT JOIN DecisionDetails dd ON ec.ExtCourseID = dd.ExtCourseID
+             WHERE ec.ExtCourseID = $1`,
+            [extCourseId]
+        );
+
+        if (infoResult.rows.length === 0) {
+            return res.status(404).json({
+                status: "error",
+                message: "Kaynak ders bulunamadı."
+            });
+        }
+
+        const applicationId = infoResult.rows[0].applicationid;
+        const affectedDecisionIds = infoResult.rows
+            .map(row => row.decisionid)
+            .filter(Boolean);
+
         await db.query(
             `DELETE FROM DecisionDetails
              WHERE ExtCourseID = $1`,
             [extCourseId]
         );
 
-        // Sonra ExternalCourses kaydını sil
         await db.query(
             `DELETE FROM ExternalCourses
              WHERE ExtCourseID = $1`,
             [extCourseId]
         );
+
+        for (const decisionId of affectedDecisionIds) {
+            const detailCount = await db.query(
+                `SELECT COUNT(*) AS count
+                 FROM DecisionDetails
+                 WHERE DecisionID = $1`,
+                [decisionId]
+            );
+
+            if (Number(detailCount.rows[0].count) === 0) {
+                await db.query(
+                    `DELETE FROM ExemptionDecisions
+                     WHERE DecisionID = $1`,
+                    [decisionId]
+                );
+            }
+        }
+
+        const remainingTargetCourses = await db.query(
+            `SELECT COUNT(*) AS count
+             FROM ExemptionDecisions
+             WHERE ApplicationID = $1
+             AND TargetCourseID IS NOT NULL`,
+            [applicationId]
+        );
+
+        if (Number(remainingTargetCourses.rows[0].count) === 0) {
+            await db.query(
+                `UPDATE Applications
+                 SET Status = 'Başvuru Sonuçlandı: Olumsuz'
+                 WHERE ApplicationID = $1`,
+                [applicationId]
+            );
+        }
 
         res.json({
             status: "success",
@@ -989,6 +1104,88 @@ exports.addExternalCourseToDecision = async (req, res) => {
 
     } catch (err) {
         console.error(err);
+
+        res.status(500).json({
+            status: "error",
+            message: err.message
+        });
+    }
+};
+
+exports.addCommissionCourseMapping = async (req, res) => {
+    const { applicationId, targetCourseId, externalCourses } = req.body;
+
+    try {
+        if (!applicationId || !targetCourseId || !externalCourses || externalCourses.length === 0) {
+            return res.status(400).json({
+                status: "error",
+                message: "Eşleştirme bilgileri eksik."
+            });
+        }
+
+        let totalWeightedScore = 0;
+        let totalSourceAKTS = 0;
+
+        for (const course of externalCourses) {
+            const gradeValue = getGradeValue(course.grade);
+            totalWeightedScore += gradeValue * Number(course.akts);
+            totalSourceAKTS += Number(course.akts);
+        }
+
+        const calculatedAverage =
+            totalSourceAKTS > 0 ? totalWeightedScore / totalSourceAKTS : 0;
+
+        const suggestedGrade = getSuggestedGrade(calculatedAverage);
+
+        const decision = await db.query(
+            `INSERT INTO ExemptionDecisions
+             (ApplicationID, TargetCourseID, IsApproved, SuggestedGrade, CalculatedScore)
+             VALUES ($1, $2, NULL, $3, $4)
+             RETURNING DecisionID`,
+            [applicationId, targetCourseId, suggestedGrade, calculatedAverage.toFixed(2)]
+        );
+
+        const decisionId = decision.rows[0].decisionid;
+
+        for (const course of externalCourses) {
+            const extRes = await db.query(
+                `INSERT INTO ExternalCourses
+                 (ApplicationID, CourseCode, CourseName, Grade, SourceAKTS, NumericGrade, SourceCredit)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)
+                 RETURNING ExtCourseID`,
+                [
+                    applicationId,
+                    course.code,
+                    course.name,
+                    course.grade,
+                    Number(course.akts),
+                    getGradeValue(course.grade),
+                    course.sourceCredit ? Number(course.sourceCredit) : null
+                ]
+            );
+
+            await db.query(
+                `INSERT INTO DecisionDetails
+                 (DecisionID, ExtCourseID)
+                 VALUES ($1, $2)`,
+                [decisionId, extRes.rows[0].extcourseid]
+            );
+        }
+
+        await db.query(
+            `UPDATE Applications
+     SET Status = 'Başvuru Sonuçlandı: Olumlu'
+     WHERE ApplicationID = $1`,
+            [applicationId]
+        );
+
+        res.json({
+            status: "success",
+            message: "Yeni eşleşme satırı oluşturuldu."
+        });
+
+    } catch (err) {
+        console.error("Yeni eşleşme ekleme hatası:", err);
 
         res.status(500).json({
             status: "error",

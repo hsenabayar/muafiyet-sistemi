@@ -119,6 +119,14 @@ router.post(
     appController.finalizeDecision
 );
 
+router.post(
+    '/commission/add-course-mapping',
+    verifyToken,
+    checkRole(['teacher', 'commission']),
+    appController.addCommissionCourseMapping
+);
+
+
 
 // ======================================================
 // 📄 PDF
