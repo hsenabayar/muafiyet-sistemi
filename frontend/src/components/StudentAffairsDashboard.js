@@ -4,7 +4,12 @@ import api from '../api';
 
 const StudentAffairsDashboard = () => {
     const [formData, setFormData] = useState({
-        studentName: '', tcNo: '', studentNo: '', department: '', password: ''
+        studentName: '',
+        tcNo: '',
+        studentNo: '',
+        faculty: 'Mühendislik Fakültesi',
+        department: '',
+        password: ''
     });
     const [students, setStudents] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
@@ -48,6 +53,7 @@ const StudentAffairsDashboard = () => {
             studentName: student.fullname,
             tcNo: student.tckimlikno || '',
             studentNo: student.studentnumber,
+            faculty: student.faculty || 'Mühendislik Fakültesi',
             department: student.department,
             password: '***'
         });
@@ -80,7 +86,14 @@ const StudentAffairsDashboard = () => {
     };
 
     const cancelEdit = () => {
-        setFormData({ studentName: '', tcNo: '', studentNo: '', department: '', password: '' });
+        setFormData({
+            studentName: '',
+            tcNo: '',
+            studentNo: '',
+            faculty: 'Mühendislik Fakültesi',
+            department: '',
+            password: ''
+        });
         setIsEditing(false);
         setMessage('');
     };
@@ -208,9 +221,15 @@ const StudentAffairsDashboard = () => {
                                 <select name="department" value={formData.department} onChange={handleInputChange} style={inputStyle} required>
                                     <option value="">Seçiniz...</option>
                                     <option value="Bilgisayar Mühendisliği">Bilgisayar Mühendisliği</option>
-                                    <option value="Elektrik Elektronik Mühendisliği">Elektrik Elektronik Mühendisliği</option>
                                     <option value="Çevre Mühendisliği">Çevre Mühendisliği</option>
+                                    <option value="Elektrik Elektronik Mühendisliği">Elektrik Elektronik Mühendisliği</option>
+                                    <option value="Endüstri Mühendisliği">Endüstri Mühendisliği</option>
                                     <option value="Gıda Mühendisliği">Gıda Mühendisliği</option>
+                                    <option value="Harita Mühendisliği">Harita Mühendisliği</option>
+                                    <option value="İnşaat Mühendisliği">İnşaat Mühendisliği</option>
+                                    <option value="Kimya Mühendisliği">Kimya Mühendisliği</option>
+                                    <option value="Makine Mühendisliği">Makine Mühendisliği</option>
+                                    <option value="Metalurji ve Malzeme Mühendisliği">Metalurji ve Malzeme Mühendisliği</option>
                                 </select>
                             </div>
 
@@ -223,7 +242,6 @@ const StudentAffairsDashboard = () => {
                                         value={formData.password}
                                         onChange={handleInputChange}
                                         style={inputStyle}
-                                        placeholder="Örn: 123456"
                                         required
                                         title="Öğrencinin sisteme ilk girişinde kullanacağı şifreyi belirleyin."
                                     />

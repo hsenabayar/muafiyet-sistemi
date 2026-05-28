@@ -2,6 +2,7 @@ const db = require('../config/db');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
+const bcrypt = require('bcrypt');
 
 
 /**
@@ -287,6 +288,17 @@ exports.generatePDF = async (req, res) => {
 
         const app = appResult.rows[0];
 
+        const settingsResult = await db.query(
+            `SELECT *
+                FROM DepartmentSettings
+                WHERE Faculty = $1 AND Department = $2
+                ORDER BY SettingID DESC
+                LIMIT 1`,
+            [app.faculty, app.department]
+        );
+
+        const departmentSetting = settingsResult.rows[0] || {};
+
         const decisionsResult = await db.query(
             `SELECT 
                 ed.DecisionID,
@@ -566,14 +578,55 @@ exports.generatePDF = async (req, res) => {
 
         y += 45;
 
-        // İMZA ALANI
-        doc.font('TR-Bold').fontSize(8).text('Komisyon Üyeleri / Bölüm Başkanı', left, y);
-        y += 20;
 
-        cell(left, y, 115, 45, '1. Üye\nİmza');
-        cell(left + 120, y, 115, 45, '2. Üye\nİmza');
-        cell(left + 240, y, 115, 45, 'Komisyon Başkanı\nİmza');
-        cell(left + 360, y, 115, 45, 'Bölüm Başkanı\nİmza');
+
+        const signatureY = y;
+        const signatureW = 120;
+        const gap = 10;
+
+        const signatureBox = (x, name, title) => {
+            doc.font('TR').fontSize(8);
+
+            // İmza çizgisi
+            doc.moveTo(x, signatureY, x + signatureW, signatureY).stroke();
+
+
+            // Ad soyad
+            doc.font('TR').fontSize(8).text(name, x, signatureY + 25, {
+                width: signatureW,
+                align: 'center'
+            });
+
+            // Görev
+            doc.font('TR-Bold').fontSize(8).text(title, x, signatureY + 38, {
+                width: signatureW,
+                align: 'center'
+            });
+        };
+
+        signatureBox(
+            left,
+            departmentSetting.commissionmember1 || '1. Üye',
+            'Komisyon Üyesi'
+        );
+
+        signatureBox(
+            left + signatureW + gap,
+            departmentSetting.commissionmember2 || '2. Üye',
+            'Komisyon Üyesi'
+        );
+
+        signatureBox(
+            left + (signatureW + gap) * 2,
+            departmentSetting.commissionpresident || 'Komisyon Başkanı',
+            'Komisyon Başkanı'
+        );
+
+        signatureBox(
+            left + (signatureW + gap) * 3,
+            departmentSetting.departmenthead || 'Bölüm Başkanı',
+            'Bölüm Başkanı'
+        );
 
         doc.font('TR').fontSize(7).text('Sayfa 1 / 1', right - 60, 760);
 
@@ -600,7 +653,7 @@ exports.getCurriculumCourses = async (req, res) => {
                 coursetype,
                 prerequisitecode
              FROM curriculum 
-             ORDER BY semester, coursename ASC`
+             ORDER BY coursecode ASC`
         );
 
         res.json({ status: "success", data: courses.rows });
@@ -1393,6 +1446,533 @@ exports.addCommissionCourseMapping = async (req, res) => {
     } catch (err) {
         console.error("Yeni eşleşme ekleme hatası:", err);
 
+        res.status(500).json({
+            status: "error",
+            message: err.message
+        });
+    }
+};
+
+// ======================================================
+// ⚙️ ADMIN PANEL FONKSİYONLARI
+// ======================================================
+
+exports.getAdminStats = async (req, res) => {
+    try {
+        const usersByRole = await db.query(`
+            SELECT Role, COUNT(*) AS count
+            FROM Users
+            GROUP BY Role
+            ORDER BY Role
+        `);
+
+        const applicationsByStatus = await db.query(`
+            SELECT Status, COUNT(*) AS count
+            FROM Applications
+            GROUP BY Status
+            ORDER BY Status
+        `);
+
+        res.json({
+            status: "success",
+            data: {
+                usersByRole: usersByRole.rows,
+                applicationsByStatus: applicationsByStatus.rows
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
+exports.getAdminUsers = async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT 
+                UserID,
+                Username,
+                FullName,
+                StudentNumber,
+                TCKimlikNo,
+                Role,
+                Faculty,
+                Department,
+                IsActive
+            FROM Users
+            ORDER BY UserID DESC
+        `);
+
+        res.json({ status: "success", data: result.rows });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
+exports.createUserByAdmin = async (req, res) => {
+    const {
+        username,
+        password,
+        fullname,
+        role,
+        studentNumber,
+        tcKimlikNo,
+        faculty,
+        department
+    } = req.body;
+
+    const allowedRoles = ['student', 'teacher', 'commission', 'admin'];
+
+    try {
+        if (!username || !password || !fullname || !role) {
+            return res.status(400).json({
+                status: "error",
+                message: "Kullanıcı adı, şifre, ad soyad ve rol zorunludur."
+            });
+        }
+
+        if (!allowedRoles.includes(role)) {
+            return res.status(400).json({
+                status: "error",
+                message: "Geçersiz rol."
+            });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        await db.query(
+            `INSERT INTO Users
+     (Username, PasswordHash, FullName, Role, StudentNumber, TCKimlikNo, Faculty, Department, IsActive)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE)`,
+            [
+                username,
+                hashedPassword,
+                fullname,
+                role,
+                studentNumber || null,
+                tcKimlikNo || null,
+                faculty || null,
+                department || null
+            ]
+        );
+
+        res.json({
+            status: "success",
+            message: "Kullanıcı oluşturuldu."
+        });
+
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
+exports.updateUserByAdmin = async (req, res) => {
+    const { userId } = req.params;
+    const {
+        fullname,
+        role,
+        studentNumber,
+        tcKimlikNo,
+        faculty,
+        department
+    } = req.body;
+
+    try {
+        await db.query(
+            `UPDATE Users
+             SET FullName = $1,
+                 Role = $2,
+                 StudentNumber = $3,
+                 TCKimlikNo = $4,
+                 Faculty = $5,
+                 Department = $6
+             WHERE UserID = $7`,
+            [
+                fullname,
+                role,
+                studentNumber || null,
+                tcKimlikNo || null,
+                faculty || null,
+                department || null,
+                userId
+            ]
+        );
+
+        res.json({
+            status: "success",
+            message: "Kullanıcı bilgileri güncellendi."
+        });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
+exports.resetUserPasswordByAdmin = async (req, res) => {
+    const { userId } = req.params;
+    const { newPassword } = req.body;
+
+    try {
+        if (!newPassword) {
+            return res.status(400).json({
+                status: "error",
+                message: "Yeni şifre zorunludur."
+            });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        await db.query(
+            `UPDATE Users
+             SET PasswordHash = $1
+             WHERE UserID = $2`,
+            [hashedPassword, userId]
+        );
+
+        res.json({
+            status: "success",
+            message: "Şifre sıfırlandı."
+        });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
+exports.changeUserStatusByAdmin = async (req, res) => {
+    const { userId } = req.params;
+    const { isActive } = req.body;
+
+    try {
+        await db.query(
+            `UPDATE Users
+             SET IsActive = $1
+             WHERE UserID = $2`,
+            [isActive, userId]
+        );
+
+        res.json({
+            status: "success",
+            message: "Kullanıcı durumu güncellendi."
+        });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
+exports.deleteUserByAdmin = async (req, res) => {
+    const { userId } = req.params;
+
+    try {
+        await db.query(
+            `DELETE FROM Users
+             WHERE UserID = $1`,
+            [userId]
+        );
+
+        res.json({
+            status: "success",
+            message: "Kullanıcı silindi."
+        });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
+exports.getAllApplicationsForAdmin = async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT 
+                ApplicationID,
+                StudentNo,
+                StudentName,
+                Faculty,
+                Department,
+                Program,
+                AcademicYear,
+                Semester,
+                ExemptionReason,
+                SourceUniversity,
+                Status
+            FROM Applications
+            ORDER BY ApplicationID DESC
+        `);
+
+        res.json({ status: "success", data: result.rows });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
+exports.assignApplicationDepartmentByAdmin = async (req, res) => {
+    const { applicationId } = req.params;
+    const { faculty, department } = req.body;
+
+    try {
+        await db.query(
+            `UPDATE Applications
+             SET Faculty = $1,
+                 Department = $2
+             WHERE ApplicationID = $3`,
+            [faculty, department, applicationId]
+        );
+
+        res.json({
+            status: "success",
+            message: "Başvuru ilgili bölüme yönlendirildi."
+        });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
+exports.createCurriculumCourseByAdmin = async (req, res) => {
+    const {
+        courseCode,
+        courseName,
+        localCredit,
+        akts,
+        semester,
+        courseType,
+        prerequisiteCode
+    } = req.body;
+
+    try {
+        await db.query(
+            `INSERT INTO Curriculum
+             (CourseCode, CourseName, LocalCredit, AKTS, Semester, CourseType, PrerequisiteCode)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+                courseCode,
+                courseName,
+                localCredit === '' ? null : Number(localCredit),
+                akts === '' ? null : Number(akts),
+                semester === '' ? null : Number(semester),
+                courseType || null,
+                prerequisiteCode || null
+            ]
+        );
+
+        res.json({
+            status: "success",
+            message: "Ders müfredata eklendi."
+        });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
+exports.updateCurriculumCourseByAdmin = async (req, res) => {
+    const { courseId } = req.params;
+    const {
+        courseCode,
+        courseName,
+        localCredit,
+        akts,
+        semester,
+        courseType,
+        prerequisiteCode
+    } = req.body;
+
+    try {
+        await db.query(
+            `UPDATE Curriculum
+             SET CourseCode = $1,
+                 CourseName = $2,
+                 LocalCredit = $3,
+                 AKTS = $4,
+                 Semester = $5,
+                 CourseType = $6,
+                 PrerequisiteCode = $7
+             WHERE CourseID = $8`,
+            [
+                courseCode,
+                courseName,
+                localCredit === '' ? null : Number(localCredit),
+                akts === '' ? null : Number(akts),
+                semester === '' ? null : Number(semester),
+                courseType || null,
+                prerequisiteCode || null,
+                courseId
+            ]
+        );
+
+        res.json({
+            status: "success",
+            message: "Ders güncellendi."
+        });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
+exports.deleteCurriculumCourseByAdmin = async (req, res) => {
+    const { courseId } = req.params;
+
+    try {
+        await db.query(
+            `DELETE FROM Curriculum
+             WHERE CourseID = $1`,
+            [courseId]
+        );
+
+        res.json({
+            status: "success",
+            message: "Ders silindi."
+        });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
+exports.getDepartmentSettings = async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT *
+            FROM DepartmentSettings
+            ORDER BY Faculty, Department
+        `);
+
+        res.json({ status: "success", data: result.rows });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
+exports.saveDepartmentSettings = async (req, res) => {
+    const {
+        faculty,
+        department,
+        commissionMember1,
+        commissionMember2,
+        commissionMember3,
+        commissionPresident,
+        departmentHead
+    } = req.body;
+
+    try {
+        await db.query(
+            `INSERT INTO DepartmentSettings
+             (Faculty, Department, CommissionMember1, CommissionMember2, CommissionMember3, CommissionPresident, DepartmentHead)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+                faculty,
+                department,
+                commissionMember1 || null,
+                commissionMember2 || null,
+                commissionMember3 || null,
+                commissionPresident || null,
+                departmentHead || null
+            ]
+        );
+
+        res.json({
+            status: "success",
+            message: "Komisyon/imza ayarları kaydedildi."
+        });
+    } catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
+    }
+};
+
+exports.getApplicationDetailForAdmin = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const appResult = await db.query(
+            `SELECT *
+             FROM Applications
+             WHERE ApplicationID = $1`,
+            [id]
+        );
+
+        if (appResult.rows.length === 0) {
+            return res.status(404).json({
+                status: "error",
+                message: "Başvuru bulunamadı."
+            });
+        }
+
+        const application = appResult.rows[0];
+
+        const decisionsResult = await db.query(
+            `SELECT 
+                ed.DecisionID,
+                ed.TargetCourseID,
+                c.CourseCode,
+                c.CourseName,
+                c.LocalCredit,
+                c.AKTS,
+                ed.SuggestedGrade,
+                ed.FinalGrade,
+                ed.IsApproved,
+                ed.ReviewNote
+             FROM ExemptionDecisions ed
+             LEFT JOIN Curriculum c ON ed.TargetCourseID = c.CourseID
+             WHERE ed.ApplicationID = $1
+             ORDER BY ed.DecisionID ASC`,
+            [id]
+        );
+
+        const externalResult = await db.query(
+            `SELECT 
+                dd.DecisionID,
+                ec.ExtCourseID,
+                ec.CourseCode,
+                ec.CourseName,
+                ec.SourceCredit,
+                ec.SourceAKTS,
+                ec.Grade
+             FROM DecisionDetails dd
+             JOIN ExternalCourses ec ON dd.ExtCourseID = ec.ExtCourseID
+             JOIN ExemptionDecisions ed ON dd.DecisionID = ed.DecisionID
+             WHERE ed.ApplicationID = $1
+             ORDER BY dd.DecisionID ASC`,
+            [id]
+        );
+
+        const attachmentsResult = await db.query(
+            `SELECT attachmentid, filetype, filename, filepath
+             FROM Attachments
+             WHERE ApplicationID = $1`,
+            [id]
+        );
+
+        const mappings = decisionsResult.rows.map(decision => {
+            const externalCourses = externalResult.rows
+                .filter(ext => ext.decisionid === decision.decisionid)
+                .map(ext => ({
+                    code: ext.coursecode,
+                    name: ext.coursename,
+                    sourceCredit: ext.sourcecredit,
+                    akts: ext.sourceakts,
+                    grade: ext.grade
+                }));
+
+            return {
+                decisionId: decision.decisionid,
+                targetCourse: {
+                    courseid: decision.targetcourseid,
+                    coursecode: decision.coursecode,
+                    coursename: decision.coursename,
+                    localcredit: decision.localcredit,
+                    akts: decision.akts
+                },
+                suggestedGrade: decision.suggestedgrade,
+                finalGrade: decision.finalgrade,
+                isApproved: decision.isapproved,
+                reviewNote: decision.reviewnote,
+                externalCourses
+            };
+        });
+
+        res.json({
+            status: "success",
+            data: {
+                application,
+                mappings,
+                attachments: attachmentsResult.rows
+            }
+        });
+
+    } catch (err) {
         res.status(500).json({
             status: "error",
             message: err.message

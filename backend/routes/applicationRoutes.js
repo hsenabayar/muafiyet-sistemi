@@ -126,7 +126,114 @@ router.post(
     appController.addCommissionCourseMapping
 );
 
+// ======================================================
+// ⚙️ ADMIN ROTALARI
+// ======================================================
 
+router.get(
+    '/admin/stats',
+    verifyToken,
+    checkRole(['admin']),
+    appController.getAdminStats
+);
+
+router.get(
+    '/admin/users',
+    verifyToken,
+    checkRole(['admin']),
+    appController.getAdminUsers
+);
+
+router.post(
+    '/admin/users',
+    verifyToken,
+    checkRole(['admin']),
+    appController.createUserByAdmin
+);
+
+router.put(
+    '/admin/users/:userId',
+    verifyToken,
+    checkRole(['admin']),
+    appController.updateUserByAdmin
+);
+
+router.put(
+    '/admin/users/:userId/password',
+    verifyToken,
+    checkRole(['admin']),
+    appController.resetUserPasswordByAdmin
+);
+
+router.put(
+    '/admin/users/:userId/status',
+    verifyToken,
+    checkRole(['admin']),
+    appController.changeUserStatusByAdmin
+);
+
+router.delete(
+    '/admin/users/:userId',
+    verifyToken,
+    checkRole(['admin']),
+    appController.deleteUserByAdmin
+);
+
+router.get(
+    '/admin/applications',
+    verifyToken,
+    checkRole(['admin']),
+    appController.getAllApplicationsForAdmin
+);
+
+router.put(
+    '/admin/applications/:applicationId/assign',
+    verifyToken,
+    checkRole(['admin']),
+    appController.assignApplicationDepartmentByAdmin
+);
+
+router.post(
+    '/admin/curriculum',
+    verifyToken,
+    checkRole(['admin']),
+    appController.createCurriculumCourseByAdmin
+);
+
+router.put(
+    '/admin/curriculum/:courseId',
+    verifyToken,
+    checkRole(['admin']),
+    appController.updateCurriculumCourseByAdmin
+);
+
+router.delete(
+    '/admin/curriculum/:courseId',
+    verifyToken,
+    checkRole(['admin']),
+    appController.deleteCurriculumCourseByAdmin
+);
+
+router.get(
+    '/admin/department-settings',
+    verifyToken,
+    checkRole(['admin']),
+    appController.getDepartmentSettings
+);
+
+router.post(
+    '/admin/department-settings',
+    verifyToken,
+    checkRole(['admin']),
+    appController.saveDepartmentSettings
+);
+
+router.get(
+    '/admin/applications/:id',
+    verifyToken,
+    checkRole(['admin']),
+    appController.getApplicationDetailForAdmin
+);
 
 // ======================================================
 // 📄 PDF

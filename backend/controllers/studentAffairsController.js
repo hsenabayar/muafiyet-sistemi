@@ -3,7 +3,7 @@ const bcrypt = require('bcrypt');
 
 // 📄 Yeni Öğrenci Kaydetme
 exports.registerStudent = async (req, res) => {
-    const { studentName, tcNo, studentNo, department, password } = req.body;
+    const { studentName, tcNo, studentNo, faculty, department, password } = req.body;
 
     try {
         // Öğrenci numarası (Username) zaten var mı kontrolü
@@ -19,10 +19,18 @@ exports.registerStudent = async (req, res) => {
         // Veritabanına Ekleme (Kullanıcı Adı olarak Öğrenci Numarasını kullanıyoruz)
         const newUser = await db.query(
             `INSERT INTO Users 
-            (Username, PasswordHash, Role, FullName, TCKimlikNo, StudentNumber, Department, Program) 
-            VALUES ($1, $2, 'student', $3, $4, $5, $6, 'Lisans') 
-            RETURNING UserID, FullName, StudentNumber, Department`,
-            [studentNo, hashedPassword, studentName, tcNo, studentNo, department]
+(Username, PasswordHash, Role, FullName, TCKimlikNo, StudentNumber, Faculty, Department, Program) 
+VALUES ($1, $2, 'student', $3, $4, $5, $6, $7, 'Lisans') 
+RETURNING UserID, FullName, StudentNumber, Faculty, Department`,
+            [
+                studentNo,
+                hashedPassword,
+                studentName,
+                tcNo,
+                studentNo,
+                faculty || 'Mühendislik Fakültesi',
+                department
+            ]
         );
 
         res.status(201).json({
@@ -42,7 +50,10 @@ exports.getAllStudents = async (req, res) => {
     try {
         const students = await db.query(
             // TCKimlikNo eklendi
-            `SELECT UserID, StudentNumber, FullName, TCKimlikNo, Department FROM Users WHERE Role = 'student' ORDER BY UserID DESC`
+            `SELECT UserID, StudentNumber, FullName, TCKimlikNo, Faculty, Department 
+                FROM Users 
+                WHERE Role = 'student' 
+                ORDER BY UserID DESC`
         );
         res.status(200).json(students.rows);
     } catch (error) {
@@ -54,15 +65,24 @@ exports.getAllStudents = async (req, res) => {
 // ✏️ Öğrenci Bilgilerini Güncelleme
 exports.updateStudent = async (req, res) => {
     const { studentNo } = req.params; // Güncellenecek öğrencinin numarası (URL'den gelir)
-    const { studentName, tcNo, department } = req.body; // Formdan gelen yeni veriler
+    const { studentName, tcNo, faculty, department } = req.body; // Formdan gelen yeni veriler
 
     try {
         const result = await db.query(
             `UPDATE Users 
-             SET FullName = $1, TCKimlikNo = $2, Department = $3 
-             WHERE StudentNumber = $4 AND Role = 'student'
-             RETURNING *`,
-            [studentName, tcNo, department, studentNo]
+                SET FullName = $1, 
+                    TCKimlikNo = $2, 
+                    Faculty = $3,
+                    Department = $4 
+                WHERE StudentNumber = $5 AND Role = 'student'
+                RETURNING *`,
+            [
+                studentName,
+                tcNo,
+                faculty || 'Mühendislik Fakültesi',
+                department,
+                studentNo
+            ]
         );
 
         if (result.rowCount === 0) {

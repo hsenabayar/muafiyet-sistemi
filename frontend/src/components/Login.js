@@ -21,12 +21,12 @@ const Login = () => {
         e.preventDefault();
         try {
             // Seçilen rolü de backend'e gönderiyoruz ki kontrol edebilsin
-            const res = await api.post('/auth/login', { 
-                username, 
-                password, 
-                role: selectedRole 
+            const res = await api.post('/auth/login', {
+                username,
+                password,
+                role: selectedRole
             });
-            
+
             const { token, user } = res.data;
 
             localStorage.setItem('token', token);
@@ -36,12 +36,16 @@ const Login = () => {
             // Role göre ilgili sayfaya yönlendiriyoruz
             if (user.role === 'student') {
                 navigate('/basvuru-yap');
+            } else if (user.role === 'teacher') {
+                navigate('/hoca-paneli');
             } else if (user.role === 'commission') {
                 navigate('/student-affairs');
+            } else if (user.role === 'admin') {
+                navigate('/admin-paneli');
             } else {
-                navigate('/hoca-paneli');
+                navigate('/unauthorized');
             }
-            
+
         } catch (err) {
             alert(err.response?.data?.message || "Giriş başarısız.");
         }
@@ -52,11 +56,11 @@ const Login = () => {
             <div style={{ maxWidth: '450px', width: '100%', padding: '30px', backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}>
                 <h2 style={{ textAlign: 'center', color: '#004a99', marginBottom: '10px' }}>OMÜ Muafiyet Giriş</h2>
                 <p style={{ textAlign: 'center', color: '#666', marginBottom: '25px', fontSize: '14px' }}>Lütfen sistemdeki rolünüzü seçerek giriş yapın</p>
-                
+
                 {/* ROL SEÇİM ALANI */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '25px' }}>
                     {roles.map((r) => (
-                        <div 
+                        <div
                             key={r.id}
                             onClick={() => setSelectedRole(r.id)}
                             style={{
@@ -81,23 +85,23 @@ const Login = () => {
 
                 <form onSubmit={handleLogin}>
                     <div style={{ marginBottom: '15px' }}>
-                        <input 
-                            type="text" 
-                            placeholder="Kullanıcı Adı / E-posta" 
-                            onChange={e => setUsername(e.target.value)} 
+                        <input
+                            type="text"
+                            placeholder="Kullanıcı Adı / E-posta"
+                            onChange={e => setUsername(e.target.value)}
                             autoComplete="off"
-                            style={{ width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box' }} 
-                            required 
+                            style={{ width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box' }}
+                            required
                         />
                     </div>
                     <div style={{ marginBottom: '20px' }}>
-                        <input 
-                            type="password" 
-                            placeholder="Şifre" 
-                            onChange={e => setPassword(e.target.value)} 
+                        <input
+                            type="password"
+                            placeholder="Şifre"
+                            onChange={e => setPassword(e.target.value)}
                             autoComplete="new-password"
-                            style={{ width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box' }} 
-                            required 
+                            style={{ width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box' }}
+                            required
                         />
                     </div>
                     <button type="submit" style={{ width: '100%', padding: '14px', background: '#004a99', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '15px' }}>
