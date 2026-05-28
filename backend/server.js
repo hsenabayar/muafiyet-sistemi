@@ -25,6 +25,8 @@ app.use('/api/curriculum', require('./routes/curriculumRoutes'));
 // 📄 Muafiyet Başvuru İşlemleri (Başvuru Oluşturma/Eşleştirme)
 app.use('/api/applications', require('./routes/applicationRoutes'));
 
+const studentAffairsRoutes = require('./routes/studentAffairsRoutes');
+app.use('/api/student-affairs', studentAffairsRoutes);
 
 // --- Sistem Kontrolleri ---
 

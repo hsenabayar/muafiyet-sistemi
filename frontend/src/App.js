@@ -3,7 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import ExemptionForm from './components/ExemptionForm';
 import Login from './components/Login';
 import TeacherDashboard from './components/TeacherDashboard'; // Yeni oluşturacağın bileşen
-import AdminDashboard from './components/AdminDashboard';     // Yeni oluşturacağın bileşen
+import AdminDashboard from './components/AdminDashboard'; // Yeni oluşturacağın bileşen
+import StudentAffairsDashboard from './components/StudentAffairsDashboard';
 
 // 🔒 Yetkisiz erişimi engelleyen koruyucu bileşen
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -50,14 +51,24 @@ function App() {
                         } 
                     />
 
-                    {/* 👨‍🏫 BÖLÜM YETKİLİSİ & ÖĞRENCİ İŞLERİ: Başvuru listesi ve Onay */}
+                    {/* 👨‍🏫 BÖLÜM YETKİLİSİ: Başvuru listesi ve Onay */}
                     <Route 
                         path="/hoca-paneli" 
                         element={
-                            <ProtectedRoute allowedRoles={['teacher', 'commission']}>
+                            <ProtectedRoute allowedRoles={['teacher',]}>
                                 <TeacherDashboard />
                             </ProtectedRoute>
                         } 
+                    />
+
+                    {/* 🎓 ÖĞRENCİ İŞLERİ: Yeni Öğrenci Kaydı (GÜVENLİ) */}
+                    <Route
+                        path="/student-affairs"
+                        element={
+                            <ProtectedRoute allowedRoles={['commission', 'admin']}>
+                                <StudentAffairsDashboard />
+                            </ProtectedRoute>
+                        }
                     />
 
                     {/* ⚙️ ADMIN: Sistem yönetimi */}

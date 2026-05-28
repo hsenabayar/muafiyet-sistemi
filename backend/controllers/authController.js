@@ -67,3 +67,27 @@ exports.login = async (req, res) => {
         res.status(500).json({ status: "error", message: err.message });
     }
 };
+
+// 👤 Giriş Yapan Öğrencinin Resmi Bilgilerini Getir
+exports.getMe = async (req, res) => {
+    const userId = req.user.id || req.user.userid || req.user.userId;
+
+    try {
+        // DİKKAT: Faculty sütunu veritabanında olmadığı için SQL sorgusundan çıkarıldı!
+        const userResult = await db.query(
+            `SELECT StudentNumber, FullName, TCKimlikNo, Department, Program 
+             FROM Users WHERE UserID = $1`,
+            [userId]
+        );
+
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ message: "Kullanıcı bulunamadı." });
+        }
+
+        // rows[0] diyerek kullanıcının tüm bilgilerini forma gönderiyoruz
+        res.status(200).json(userResult.rows[0]);
+    } catch (err) {
+        console.error("Kullanıcı bilgisi çekme hatası:", err);
+        res.status(500).json({ message: "Sunucu hatası." });
+    }
+};

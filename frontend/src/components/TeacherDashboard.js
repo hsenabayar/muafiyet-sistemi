@@ -1,5 +1,30 @@
 import React, { useEffect, useState } from 'react';
+import { LogOut, User } from 'lucide-react';
 import api from '../api';
+
+const Header = ({ userName, userRole, panelTitle, onLogout }) => (
+    <div style={headerBannerStyle}>
+        <div>
+            <h3 style={{ margin: '4px' }}>T.C. ONDOKUZ MAYIS ÜNİVERSİTESİ</h3>
+            <h2 style={{ margin: '4px', color: '#004a99' }}>Ders Saydırma ve Muafiyet Sistemi</h2>
+            <p style={{ margin: '4px', color: '#666' }}>{panelTitle}</p>
+        </div>
+        <div style={{ textAlign: 'right', background: '#f8f9fa', padding: '10px 15px', border: '1px solid #eee', borderRadius: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', color: '#004a99', fontWeight: 'bold', fontSize: '16px' }}>
+                {/* Kullanıcı ikonu burada */}
+                <User size={20} />
+                {userName || 'Kullanıcı'}
+            </div>
+            {/* Görev bilgisi burada */}
+            <div style={{ color: '#333', fontSize: '13px', marginTop: '4px', marginBottom: '8px', fontWeight: '500' }}>
+                {userRole || 'Bölüm Yetkilisi'}
+            </div>
+            <button onClick={onLogout} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 10px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', marginLeft: 'auto' }}>
+                <LogOut size={14} /> Çıkış Yap
+            </button>
+        </div>
+    </div>
+);
 
 const TeacherDashboard = () => {
     const [applications, setApplications] = useState([]);
@@ -18,9 +43,9 @@ const TeacherDashboard = () => {
     useEffect(() => {
         loadApplications();
 
-        api.get('/applications/curriculum')
+        api.get('/curriculum')
             .then(res => {
-                setCurriculum(res.data.data || []);
+                setCurriculum(res.data || []);
             })
             .catch(err => {
                 console.error("Müfredat alınamadı:", err);
@@ -54,6 +79,28 @@ const TeacherDashboard = () => {
         }
 
         return '';
+    };
+
+    const [currentUser, setCurrentUser] = useState(null);
+
+    useEffect(() => {
+        loadApplications();
+        fetchCurrentUser(); // Yetkili bilgisini çek
+        // ... diğer useEffect içeriği
+    }, []);
+
+    const fetchCurrentUser = async () => {
+        try {
+            const res = await api.get('/auth/me');
+            setCurrentUser(res.data);
+        } catch (err) {
+            console.error("Yetkili bilgisi alınamadı", err);
+        }
+    };
+
+    const handleLogout = () => {
+        localStorage.clear();
+        window.location.href = '/login';
     };
 
     const getCleanCourseName = (courseName) => {
@@ -373,6 +420,12 @@ const TeacherDashboard = () => {
 
         return (
             <div style={pageStyle}>
+                <Header 
+                    userName={currentUser?.fullname || 'Yükleniyor...'}
+                    userRole={currentUser?.department || 'Bölüm Yetkilisi'}
+                    panelTitle="Bölüm Yetkilisi Yönetim Paneli"
+                    onLogout={handleLogout} 
+                />
                 <div style={containerStyle}>
                     <button
                         type="button"
@@ -457,6 +510,12 @@ const TeacherDashboard = () => {
                                     <td style={tdStyle}>{app.sourcefaculty || '-'}</td>
                                     <td style={labelCell}>Önceki Bölüm</td>
                                     <td style={tdStyle}>{app.sourcedepartment || '-'}</td>
+                                </tr>
+                                <tr>
+                                    <td style={labelCell}>Öğrencinin Notu</td>
+                                    <td colSpan="3" style={{ ...tdStyle, fontStyle: 'italic', color: '#4f6fd9' }}>
+                                        {app.intakenote || 'Öğrenci ek bir not/açıklama girmemiş.'}
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -941,6 +1000,12 @@ const TeacherDashboard = () => {
 
     return (
         <div style={pageStyle}>
+            <Header
+                userName={currentUser?.fullname || 'Yükleniyor...'}
+                userRole={currentUser?.department || 'Bölüm Yetkilisi'}
+                panelTitle="Bölüm Yetkilisi Yönetim Paneli"
+                onLogout={handleLogout}
+            />
             <div style={containerStyle}>
                 <h2 style={{ color: '#004a99' }}>Komisyon Başvuru Listesi</h2>
 
@@ -1026,5 +1091,65 @@ const tdStyle = { border: '1px solid #ddd', padding: '8px' };
 const labelCell = { border: '1px solid #ddd', padding: '8px', fontWeight: 'bold', background: '#f8f9fa' };
 const primaryButton = { padding: '6px 10px', backgroundColor: '#004a99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' };
 const secondaryButton = { padding: '7px 12px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', marginBottom: '15px' };
+// ... (Mevcut stillerinizin altına ekleyin)
+
+const headerCardStyle = {
+    backgroundColor: 'white',
+    padding: '20px 25px',
+    borderRadius: '8px',
+    border: '1px solid #ddd',
+    marginBottom: '20px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    maxWidth: '1200px',
+    margin: '0 auto 20px auto' // Ortalama ve alt boşluk
+};
+
+const headerLeftStyle = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px'
+};
+
+const userInfoBoxStyle = {
+    border: '1px solid #eee',
+    borderRadius: '6px',
+    padding: '12px 15px',
+    backgroundColor: '#fafafa',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    minWidth: '250px'
+};
+
+const logoutBtnStyle = {
+    marginTop: '10px',
+    backgroundColor: '#dc3545',
+    color: 'white',
+    border: 'none',
+    padding: '6px 12px',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '13px',
+    fontWeight: 'bold',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px'
+};
+
+const headerBannerStyle = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    padding: '15px 25px',
+    border: '1px solid #ddd',
+    borderRadius: '8px',
+    marginBottom: '20px',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+    maxWidth: '1200px',
+    margin: '0 auto 20px auto'
+};
 
 export default TeacherDashboard;

@@ -36,6 +36,8 @@ const Login = () => {
             // Role göre ilgili sayfaya yönlendiriyoruz
             if (user.role === 'student') {
                 navigate('/basvuru-yap');
+            } else if (user.role === 'commission') {
+                navigate('/student-affairs');
             } else {
                 navigate('/hoca-paneli');
             }
