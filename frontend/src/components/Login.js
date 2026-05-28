@@ -50,8 +50,17 @@ const Login = () => {
     return (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#f0f2f5' }}>
             <div style={{ maxWidth: '450px', width: '100%', padding: '30px', backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}>
-                <h2 style={{ textAlign: 'center', color: '#004a99', marginBottom: '10px' }}>OMÜ Muafiyet Giriş</h2>
-                <p style={{ textAlign: 'center', color: '#666', marginBottom: '25px', fontSize: '14px' }}>Lütfen sistemdeki rolünüzü seçerek giriş yapın</p>
+
+                <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                    <img
+                        src="https://www.omu.edu.tr/sites/all/themes/anasayfa/images/Kurumsal/OMULogo-TR-PNG.png"
+                        alt="OMÜ Logo"
+                        style={{ maxWidth: '180px', height: 'auto' }}
+                    />
+                </div>
+
+                <h2 style={{ textAlign: 'center', color: '#004a99', marginBottom: '10px' }}>OMÜ Muafiyet Sistemi</h2>
+                <p style={{ textAlign: 'center', color: '#666', marginBottom: '25px', fontSize: '14px' }}>Lütfen sistemdeki rolünüzü seçerek giriş yapınız. Kullanıcı adı ve şifreniz yoksa Öğrenci İşleri ile iletişime geçiniz.</p>
                 
                 {/* ROL SEÇİM ALANI */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '25px' }}>
@@ -101,7 +110,7 @@ const Login = () => {
                         />
                     </div>
                     <button type="submit" style={{ width: '100%', padding: '14px', background: '#004a99', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '15px' }}>
-                        {selectedRole.toUpperCase()} OLARAK GİRİŞ YAP
+                        GİRİŞ YAP
                     </button>
                 </form>
             </div>
