@@ -166,6 +166,30 @@ const TeacherDashboard = () => {
         }
     };
 
+    const downloadPDF = async (applicationId) => {
+        try {
+            const res = await api.get(`/applications/download-report/${applicationId}`, {
+                responseType: 'blob'
+            });
+
+            const fileURL = window.URL.createObjectURL(new Blob([res.data], {
+                type: 'application/pdf'
+            }));
+
+            const link = document.createElement('a');
+            link.href = fileURL;
+            link.setAttribute('download', `ders_muafiyet_formu_${applicationId}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+
+            link.remove();
+            window.URL.revokeObjectURL(fileURL);
+
+        } catch (err) {
+            alert(err.response?.data?.message || "PDF indirilemedi.");
+        }
+    };
+
     const updateDecision = async (decisionId, isApproved, finalGrade, reviewNote) => {
         try {
             await api.post('/applications/finalize-decision', {
@@ -412,6 +436,24 @@ const TeacherDashboard = () => {
                     </button>
 
                     <h2 style={{ color: '#004a99' }}>Başvuru Detayı</h2>
+
+                    <div style={{ marginBottom: '20px', textAlign: 'right' }}>
+                        <button
+                            type="button"
+                            onClick={() => downloadPDF(app.applicationid)}
+                            style={{
+                                padding: '10px 16px',
+                                backgroundColor: '#198754',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            PDF Formunu İndir
+                        </button>
+                    </div>
 
                     {/* Öğrenci Bilgileri */}
                     <div style={sectionStyle}>
