@@ -33,9 +33,22 @@ const ExemptionForm = () => {
     const [internshipFile, setInternshipFile] = useState(null);
 
     useEffect(() => {
-        api.get('/applications/curriculum')
+        api.get('/auth/me')
             .then(res => {
-                setCurriculum(res.data.data || []);
+                const user = res.data;
+                // PostgreSQL sütun isimleri genellikle küçük harfle döner
+                setStudentNo(user.studentnumber || user.StudentNumber || '');
+                setStudentName(user.fullname || user.FullName || '');
+                setTcNo(user.tckimlikno || user.TCKimlikNo || '');
+                setFaculty(user.faculty || user.Faculty || 'Mühendislik Fakültesi');
+                setDepartment(user.department || user.Department || 'Bilgisayar Mühendisliği');
+                setProgram(user.program || user.Program || 'Lisans');
+            })
+            .catch(err => console.error("Öğrenci bilgileri alınamadı:", err));
+
+        api.get('/curriculum')
+            .then(res => {
+                setCurriculum(res.data || []);
             })
             .catch(err => {
                 console.error("Dersler yüklenemedi:", err);
@@ -928,36 +941,63 @@ const ExemptionForm = () => {
                         <h3 style={{ borderBottom: '2px solid #004a99', paddingBottom: '10px' }}>
                             1. Öğrenci Bilgileri
                         </h3>
+                        <p style={{ color: '#dc3545', fontSize: '13px', fontStyle: 'italic' }}>
+                            * Bu bilgiler Öğrenci İşleri tarafından merkezi olarak atanmıştır, değiştirilemez.
+                        </p>
 
                         <div style={gridTwo}>
                             <div>
                                 <label style={labelStyle}>Öğrenci No</label>
-                                <input style={inputStyle} value={studentNo} onChange={(e) => setStudentNo(e.target.value)} />
+                                <input
+                                    style={{ ...inputStyle, backgroundColor: '#e9ecef', color: '#6c757d', cursor: 'not-allowed' }}
+                                    value={studentNo}
+                                    readOnly
+                                />
                             </div>
 
                             <div>
                                 <label style={labelStyle}>Adı Soyadı</label>
-                                <input style={inputStyle} value={studentName} onChange={(e) => setStudentName(e.target.value)} />
+                                <input
+                                    style={{ ...inputStyle, backgroundColor: '#e9ecef', color: '#6c757d', cursor: 'not-allowed' }}
+                                    value={studentName}
+                                    readOnly
+                                />
                             </div>
 
                             <div>
                                 <label style={labelStyle}>T.C. Kimlik No</label>
-                                <input style={inputStyle} value={tcNo} onChange={(e) => setTcNo(e.target.value)} />
+                                <input
+                                    style={{ ...inputStyle, backgroundColor: '#e9ecef', color: '#6c757d', cursor: 'not-allowed' }}
+                                    value={tcNo}
+                                    readOnly
+                                />
                             </div>
 
                             <div>
                                 <label style={labelStyle}>Fakülte / YO / MYO</label>
-                                <input style={inputStyle} value={faculty} onChange={(e) => setFaculty(e.target.value)} />
+                                <input
+                                    style={{ ...inputStyle, backgroundColor: '#e9ecef', color: '#6c757d', cursor: 'not-allowed' }}
+                                    value={faculty}
+                                    readOnly
+                                />
                             </div>
 
                             <div>
                                 <label style={labelStyle}>Bölüm</label>
-                                <input style={inputStyle} value={department} onChange={(e) => setDepartment(e.target.value)} />
+                                <input
+                                    style={{ ...inputStyle, backgroundColor: '#e9ecef', color: '#6c757d', cursor: 'not-allowed' }}
+                                    value={department}
+                                    readOnly
+                                />
                             </div>
 
                             <div>
                                 <label style={labelStyle}>Program</label>
-                                <input style={inputStyle} value={program} onChange={(e) => setProgram(e.target.value)} />
+                                <input
+                                    style={{ ...inputStyle, backgroundColor: '#e9ecef', color: '#6c757d', cursor: 'not-allowed' }}
+                                    value={program}
+                                    readOnly
+                                />
                             </div>
                         </div>
                     </div>
