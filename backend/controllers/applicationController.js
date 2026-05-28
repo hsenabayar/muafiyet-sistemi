@@ -274,108 +274,314 @@ exports.generatePDF = async (req, res) => {
     const { id } = req.params;
 
     try {
-        // 1. Veri Çekme (userid ve fullname üzerinden)
-        const appInfo = await db.query(
-            `SELECT a.*, u.fullname, u.tckimlikno, u.studentnumber 
-             FROM Applications a 
-             JOIN Users u ON a.userid = u.userid WHERE a.applicationid = $1`, [id]
+        const appResult = await db.query(
+            `SELECT *
+             FROM Applications
+             WHERE ApplicationID = $1`,
+            [id]
         );
 
-        // Sadece onaylanan dersleri, hem dış hem iç ders bilgileriyle çekiyoruz
-        const decisions = await db.query(
-            `SELECT ed.finalgrade, ed.reviewnote, 
-                    c.coursecode as target_code, c.coursename as target_name, c.akts as target_akts,
-                    string_agg(ec.coursename || ' (' || ec.grade || ')', ' + ') as source_details,
-                    sum(ec.sourceakts) as source_total_akts
+        if (appResult.rows.length === 0) {
+            return res.status(404).send("Başvuru bulunamadı.");
+        }
+
+        const app = appResult.rows[0];
+
+        const decisionsResult = await db.query(
+            `SELECT 
+                ed.DecisionID,
+                ed.FinalGrade,
+                c.CourseCode AS TargetCode,
+                c.CourseName AS TargetName,
+                c.LocalCredit AS TargetCredit,
+                c.AKTS AS TargetAKTS
              FROM ExemptionDecisions ed
-             JOIN curriculum c ON ed.TargetCourseID = c.courseid
-             JOIN DecisionDetails dd ON ed.DecisionID = dd.DecisionID
-             JOIN ExternalCourses ec ON dd.ExtCourseID = ec.ExtCourseID
-             WHERE ed.ApplicationID = $1 AND ed.IsApproved = true
-             GROUP BY ed.decisionid, c.coursecode, c.coursename, c.akts, ed.finalgrade, ed.reviewnote`, [id]
+             JOIN Curriculum c ON ed.TargetCourseID = c.CourseID
+             WHERE ed.ApplicationID = $1
+             AND ed.TargetCourseID IS NOT NULL
+             ORDER BY ed.DecisionID ASC`,
+            [id]
         );
 
-        if (appInfo.rows.length === 0) return res.status(404).send("Başvuru bulunamadı.");
+        const externalResult = await db.query(
+            `SELECT 
+                dd.DecisionID,
+                ec.CourseCode,
+                ec.CourseName,
+                ec.SourceCredit,
+                ec.SourceAKTS,
+                ec.Grade
+             FROM DecisionDetails dd
+             JOIN ExternalCourses ec ON dd.ExtCourseID = ec.ExtCourseID
+             JOIN ExemptionDecisions ed ON dd.DecisionID = ed.DecisionID
+             WHERE ed.ApplicationID = $1
+             ORDER BY dd.DecisionID ASC`,
+            [id]
+        );
 
-        const app = appInfo.rows[0];
-        const doc = new PDFDocument({ margin: 30, size: 'A4' });
+        const PDFDocument = require('pdfkit');
+        const doc = new PDFDocument({ size: 'A4', margin: 45 });
+
+        const fontPath = path.join('C:', 'Windows', 'Fonts', 'arial.ttf');
+        const boldFontPath = path.join('C:', 'Windows', 'Fonts', 'arialbd.ttf');
+
+        doc.registerFont('TR', fontPath);
+        doc.registerFont('TR-Bold', boldFontPath);
+
+        doc.font('TR');
 
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=OMU_Muafiyet_Formu_${id}.pdf`);
+        res.setHeader(
+            'Content-Disposition',
+            `attachment; filename=ders_muafiyet_formu_${id}.pdf`
+        );
+
         doc.pipe(res);
 
-        // --- PDF TASARIMI (PP1.2.FR.0041 STANDARDI) ---
+        const pageWidth = doc.page.width;
+        const left = 45;
+        const right = pageWidth - 45;
 
-        // Üst Başlık ve Logo Alanı
-        doc.fontSize(10).text('T.C.', { align: 'center' });
-        doc.fontSize(12).text('ONDOKUZ MAYIS ÜNİVERSİTESİ', { align: 'center', weight: 'bold' });
-        doc.fontSize(12).text('DERS MUAFİYET BAŞVURU FORMU', { align: 'center', weight: 'bold' });
-        doc.fontSize(7).text('Form No: PP1.2.FR.0041', { align: 'right' });
-        doc.moveDown();
+        const cell = (x, y, w, h, text, options = {}) => {
+            doc.rect(x, y, w, h).stroke();
 
-        // Öğrenci Bilgileri Tablosu (Görsel 33'teki yapı)
-        const startY = 100;
-        doc.rect(30, startY, 535, 50).stroke(); // Çerçeve
-        doc.fontSize(9);
-        doc.text(`Öğrenci No: ${app.studentnumber || '-'}`, 40, startY + 10);
-        doc.text(`Fakülte: Mühendislik Fakültesi`, 250, startY + 10);
-        doc.text(`Adı Soyadı: ${app.fullname}`, 40, startY + 25);
-        doc.text(`Bölüm: Bilgisayar Mühendisliği Bölümü`, 250, startY + 25);
-        doc.text(`T.C. Kimlik No: ${app.tckimlikno || '-'}`, 40, startY + 40);
-        doc.text(`Muafiyet Gerekçesi: ${app.exemptionreason || 'Yatay Geçiş'}`, 250, startY + 40);
+            if (options.bold) {
+                doc.font('TR-Bold');
+            } else {
+                doc.font('TR');
+            }
 
-        doc.moveDown(3);
+            doc.fontSize(options.fontSize || 8);
 
-        // Karşılaştırmalı Muafiyet Tablosu Başlıkları
-        const tableY = 170;
-        doc.rect(30, tableY, 535, 20).fillAndStroke('#eeeeee', '#000000');
-        doc.fillColor('#000000').fontSize(8);
-        doc.text('GELDİĞİ KURUMDA ALDIĞI DERSLER', 40, tableY + 7);
-        doc.text('OMU TRANSKRİPTİNE AKTARILACAK DERSLER', 300, tableY + 7);
+            doc.text(String(text || ''), x + 4, y + 5, {
+                width: w - 8,
+                align: options.align || 'left'
+            });
+        };
 
-        // Ders Listesi
-        let currentY = tableY + 25;
-        decisions.rows.forEach((row, i) => {
-            // Satır Çizgisi
-            doc.moveTo(30, currentY + 25).lineTo(565, currentY + 25).stroke('#cccccc');
+        // BAŞLIK
+        doc.font('TR-Bold').fontSize(11).text('T.C.', 0, 35, { align: 'center' });
+        doc.fontSize(13).text('ONDOKUZ MAYIS ÜNİVERSİTESİ', { align: 'center' });
+        doc.fontSize(12).text('DERS MUAFİYET BAŞVURU FORMU', { align: 'center' });
 
-            // Sol Taraf (Dış Ders)
-            doc.fontSize(8).text(row.source_details, 40, currentY, { width: 240 });
+        doc.font('TR').fontSize(7).text(
+            'PP1.2.FR.0041, R0, Temmuz 2019',
+            right - 120,
+            35
+        );
 
-            // Sağ Taraf (OMÜ Ders)
-            doc.text(`[${row.target_code}] ${row.target_name}`, 300, currentY);
-            doc.text(`Not: ${row.finalgrade} | AKTS: ${row.target_akts}`, 300, currentY + 10);
+        let y = 95;
 
-            currentY += 35;
+        // AKADEMİK YIL
+        cell(left, y, 100, 22, 'Akademik Yıl', { bold: true });
+        cell(left + 100, y, 180, 22, app.academicyear || '');
+        cell(left + 280, y, 80, 22, 'Yarıyıl', { bold: true });
+        cell(left + 360, y, right - left - 360, 22, app.semester || '');
+        y += 35;
 
-            // Sayfa sonu kontrolü
-            if (currentY > 650) { doc.addPage(); currentY = 50; }
+        // ÖĞRENCİ BİLGİLERİ
+        doc.font('TR-Bold').fontSize(9).text('ÖĞRENCİ BİLGİLERİ', left, y, {
+            width: right - left,
+            align: 'center'
+        });
+        y += 15;
+
+        cell(left, y, 95, 20, 'Öğrenci No', { bold: true });
+        cell(left + 95, y, 190, 20, app.studentno || '');
+        cell(left + 285, y, 115, 20, 'Fakülte/YO/MYO', { bold: true });
+        cell(left + 400, y, right - left - 400, 20, app.faculty || '');
+        y += 20;
+
+        cell(left, y, 95, 20, 'Adı - Soyadı', { bold: true });
+        cell(left + 95, y, 190, 20, app.studentname || '');
+        cell(left + 285, y, 115, 20, 'Bölüm', { bold: true });
+        cell(left + 400, y, right - left - 400, 20, app.department || '');
+        y += 20;
+
+        cell(left, y, 95, 20, 'T.C. Kimlik No', { bold: true });
+        cell(left + 95, y, 190, 20, app.tcno || '');
+        cell(left + 285, y, 115, 20, 'Program', { bold: true });
+        cell(left + 400, y, right - left - 400, 20, app.program || '');
+        y += 35;
+
+        // MUAFİYET TALEBİ
+        doc.font('TR-Bold').fontSize(9).text('MUAFİYET TALEBİ', left, y, {
+            width: right - left,
+            align: 'center'
+        });
+        y += 18;
+
+        doc.font('TR').fontSize(8).text(
+            'Önceki yıllarda okuduğum Yükseköğretim Kurumunda başarılı olduğum dersleri gösteren transkriptim ektedir.',
+            left,
+            y,
+            {
+                width: right - left,
+                indent: 21
+            }
+        );
+        y += 14;
+
+        doc.text(
+            'Aşağıda belirttiğim eşdeğer derslerden muaf olmak istiyorum.',
+            left,
+            y,
+            { width: right - left }
+        );
+        y += 18;
+
+        doc.text('Gereğini bilgilerinize arz ederim.', left + 21, y);
+
+        y += 30;
+
+        // DERS TABLOSU BAŞLIK
+
+        const innerPadding = 10;
+        const tableX = left + innerPadding;
+        const tableW = right - left - (innerPadding * 2);
+
+
+        const col = {
+            sourceCode: 42,
+            sourceName: 135,
+            sourceCredit: 32,
+            sourceAkts: 35,
+            sourceGrade: 32,
+            targetCode: 45,
+            targetName: 135,
+            targetCredit: 32,
+            targetAkts: 32
+        };
+
+
+        const sourceTableW =
+            col.sourceCode + col.sourceName + col.sourceCredit + col.sourceAkts + col.sourceGrade;
+
+        const targetTableW =
+            col.targetCode + col.targetName + col.targetCredit + col.targetAkts;
+
+        const sourceX = {
+            code: tableX,
+            name: tableX + col.sourceCode,
+            credit: tableX + col.sourceCode + col.sourceName,
+            akts: tableX + col.sourceCode + col.sourceName + col.sourceCredit,
+            grade: tableX + col.sourceCode + col.sourceName + col.sourceCredit + col.sourceAkts
+        };
+
+        const targetX = tableX + sourceTableW;
+
+        const targetColX = {
+            code: targetX,
+            name: targetX + col.targetCode,
+            credit: targetX + col.targetCode + col.targetName,
+            akts: targetX + col.targetCode + col.targetName + col.targetCredit
+        };
+
+        cell(tableX, y, sourceTableW, 24, 'DAHA ÖNCE OKUDUĞU YÜKSEKÖĞRETİM KURUMUNDAKİ DERSLER', {
+            bold: true,
+            align: 'center',
+            fontSize: 7
         });
 
-        // İntibak Notu
-        doc.moveDown();
-        doc.fontSize(9).text(`Not: ${app.intakenote || 'İntibakı ilgili sınıfa yapılacaktır.'}`, { oblique: true });
+        cell(tableX + sourceTableW, y, targetTableW, 24, 'OMÜ FAKÜLTE / YÜKSEKOKUL ALDIĞI EŞ DEĞER DERSLER', {
+            bold: true,
+            align: 'center',
+            fontSize: 7
+        });
 
-        // 4'lü Komisyon İmza Bloğu (Görsel 40'a göre)
-        const footerY = 720;
-        doc.fontSize(8);
+        y += 24;
 
-        doc.text('Dr. Öğr. Üyesi İsmail İŞERİ', 40, footerY);
-        doc.text('Komisyon Üyesi', 40, footerY + 10);
+        cell(sourceX.code, y, col.sourceCode, 20, 'Kodu', { bold: true, fontSize: 7 });
+        cell(sourceX.name, y, col.sourceName, 20, 'Dersin Adı', { bold: true, fontSize: 7 });
+        cell(sourceX.credit, y, col.sourceCredit, 20, 'K', { bold: true, align: 'center', fontSize: 7 });
+        cell(sourceX.akts, y, col.sourceAkts, 20, 'AKTS', { bold: true, align: 'center', fontSize: 7 });
+        cell(sourceX.grade, y, col.sourceGrade, 20, 'Notu', { bold: true, align: 'center', fontSize: 7 });
 
-        doc.text('Dr. Öğr. Üyesi Gökhan KAYHAN', 170, footerY);
-        doc.text('Komisyon Üyesi', 170, footerY + 10);
+        cell(targetColX.code, y, col.targetCode, 20, 'Kodu', { bold: true, fontSize: 7 });
+        cell(targetColX.name, y, col.targetName, 20, 'Dersin Adı', { bold: true, fontSize: 7 });
+        cell(targetColX.credit, y, col.targetCredit, 20, 'K', { bold: true, align: 'center', fontSize: 7 });
+        cell(targetColX.akts, y, col.targetAkts, 20, 'AKTS', { bold: true, align: 'center', fontSize: 7 });
 
-        doc.text('Dr. Öğr. Üyesi Erhan ERGÜN', 300, footerY);
-        doc.text('Komisyon Başkanı', 300, footerY + 10);
+        y += 20;
 
-        doc.text('Prof. Dr. Erdal KILIÇ', 440, footerY);
-        doc.text('Bölüm Başkanı', 440, footerY + 10);
+
+        decisionsResult.rows.forEach(decision => {
+            const externalCourses = externalResult.rows.filter(
+                ext => ext.decisionid === decision.decisionid
+            );
+
+            externalCourses.forEach((ext, index) => {
+                if (y > 690) {
+                    doc.addPage();
+                    y = 40;
+                }
+
+                const rowH = 28;
+
+                cell(sourceX.code, y, col.sourceCode, rowH, ext.coursecode || '', { fontSize: 7 });
+                cell(sourceX.name, y, col.sourceName, rowH, ext.coursename || '', { fontSize: 7 });
+                cell(sourceX.credit, y, col.sourceCredit, rowH, ext.sourcecredit || '', { align: 'center', fontSize: 7 });
+                cell(sourceX.akts, y, col.sourceAkts, rowH, ext.sourceakts || '', { align: 'center', fontSize: 7 });
+                cell(sourceX.grade, y, col.sourceGrade, rowH, ext.grade || '', { align: 'center', fontSize: 7 });
+
+                if (index === 0) {
+                    cell(targetX, y, col.targetCode, rowH, decision.targetcode || '', { fontSize: 7 });
+                    cell(targetX + col.targetCode, y, col.targetName, rowH, decision.targetname || '', { fontSize: 7 });
+                    cell(targetX + col.targetCode + col.targetName, y, col.targetCredit, rowH, decision.targetcredit || '', { align: 'center', fontSize: 7 });
+                    cell(targetX + col.targetCode + col.targetName + col.targetCredit, y, col.targetAkts, rowH, decision.targetakts || '', { align: 'center', fontSize: 7 });
+                } else {
+                    cell(targetColX.code, y, col.targetCode, rowH, '', { fontSize: 7 });
+                    cell(targetColX.name, y, col.targetName, rowH, '', { fontSize: 7 });
+                    cell(targetColX.credit, y, col.targetCredit, rowH, '', { align: 'center', fontSize: 7 });
+                    cell(targetColX.akts, y, col.targetAkts, rowH, '', { align: 'center', fontSize: 7 });
+                }
+
+                y += rowH;
+            });
+        });
+
+        y += 30;
+
+        // EKLER
+        doc.font('TR-Bold').fontSize(9).text('EKLER', left, y);
+        y += 15;
+
+        doc.font('TR').fontSize(8).text('☐ 1. Öğrencinin onaylı not durum belgesi/transkripti.', left, y);
+        y += 13;
+        doc.text('☐ 2. Onaylı müfredat ve ders içerikleri', left, y);
+        y += 13;
+        doc.text('☐ 3. Transkriptte yoksa staj durumunu gösteren belge.', left, y);
+        y += 25;
+
+        // AÇIKLAMALAR
+        doc.font('TR-Bold').fontSize(9).text('AÇIKLAMALAR', left, y);
+        y += 15;
+
+        doc.font('TR').fontSize(8).text(
+            'Muafiyet başvurusu dönem başından sonra gelen 3 hafta içinde yapılabilir. Bu süre sonrası yapılan başvurular kabul edilmez.',
+            left,
+            y,
+            { width: right - left }
+        );
+
+        y += 45;
+
+        // İMZA ALANI
+        doc.font('TR-Bold').fontSize(8).text('Komisyon Üyeleri / Bölüm Başkanı', left, y);
+        y += 20;
+
+        cell(left, y, 115, 45, '1. Üye\nİmza');
+        cell(left + 120, y, 115, 45, '2. Üye\nİmza');
+        cell(left + 240, y, 115, 45, 'Komisyon Başkanı\nİmza');
+        cell(left + 360, y, 115, 45, 'Bölüm Başkanı\nİmza');
+
+        doc.font('TR').fontSize(7).text('Sayfa 1 / 1', right - 60, 760);
 
         doc.end();
 
     } catch (err) {
-        res.status(500).send("PDF Oluşturma Hatası: " + err.message);
+        console.error("PDF oluşturma hatası:", err);
+        res.status(500).send("PDF oluşturma hatası: " + err.message);
     }
 };
 
