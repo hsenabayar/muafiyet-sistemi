@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import Select from 'react-select';
 import { LogOut, User } from 'lucide-react';
 import api from '../api';
+import { Trash2 } from 'lucide-react';
 
 const Header = ({ userName, userRole, panelTitle, onLogout }) => (
     <div style={headerBannerStyle}>
@@ -126,6 +128,16 @@ const TeacherDashboard = () => {
         groups[groupTitle].push(course);
         return groups;
     }, {});
+
+    const courseSelectOptions = Object.keys(groupedCurriculum).map(groupName => ({
+        label: groupName,
+        options: groupedCurriculum[groupName].map(c => ({
+            value: c.courseid,
+            label: `[${c.coursecode}] ${getCleanCourseName(c.coursename)} - Kredi: ${c.localcredit || '-'} - ${c.akts} AKTS`
+        }))
+    }));
+
+    const allCourseOptions = courseSelectOptions.flatMap(group => group.options);
 
     const loadApplications = () => {
         api.get('/applications/commission/applications')
@@ -290,12 +302,14 @@ const TeacherDashboard = () => {
         }
     };
 
-    // 🎯 Yeni Backend Fonksiyonu: Belirli bir Kararı (Hedef Ders Eşleşmesini) Sağ Taraftan Silme
+    // 🎯 Belirli bir hedef OMÜ dersini silme
     const deleteTargetCourseDecision = async (decisionId) => {
-        if (!window.confirm("Bu hedef OMÜ dersini ve bağlı kararı silmek istediğinize emin misiniz?")) return;
+        if (!window.confirm("Bu hedef OMÜ dersini ve bağlı kararı silmek istediğinize emin misiniz?"))
+            return;
+
         try {
             await api.delete(`/applications/commission/decision/${decisionId}`);
-            alert("Hedef ders başarıyla silindi.");
+
             openDetail(selectedApplication.application.applicationid);
         } catch (err) {
             alert(err.response?.data?.message || "Hedef ders silinemedi.");
@@ -323,12 +337,34 @@ const TeacherDashboard = () => {
         if (!window.confirm("Bu kaynak dersi eşleştirmeden silmek istediğinize emin misiniz?")) return;
         try {
             await api.delete(`/applications/commission/external-course/${mappingId}`);
-            alert("Kaynak ders silindi.");
+
             openDetail(selectedApplication.application.applicationid);
         } catch (err) {
             alert(err.response?.data?.message || "Kaynak ders silinemedi.");
         }
     };
+
+    const deleteMappingGroup = async (group) => {
+        if (!window.confirm("Bu ders eşleştirmesini tamamen silmek istediğinize emin misiniz?")) return;
+
+        try {
+            for (const decision of group.decisions) {
+                await api.delete(`/applications/commission/decision/${decision.decisionId || decision.decisionid}`);
+            }
+
+            for (const course of group.externalCourses) {
+                const extId = course.extCourseId || course.extcourseid;
+                if (extId) {
+                    await api.delete(`/applications/commission/external-course/${extId}`);
+                }
+            }
+
+            openDetail(selectedApplication.application.applicationid);
+        } catch (err) {
+            alert(err.response?.data?.message || "Eşleşme silinemedi.");
+        }
+    };
+
 
     const addNewMappingFromEmptyState = async () => {
         const code = document.getElementById('new-ext-code').value;
@@ -336,7 +372,7 @@ const TeacherDashboard = () => {
         const sourceCredit = document.getElementById('new-ext-credit').value;
         const akts = document.getElementById('new-ext-akts').value;
         const grade = document.getElementById('new-ext-grade').value;
-        const targetCourseId = document.getElementById('new-target-course').value;
+        const targetCourseId = window.newTargetCourseId;
 
         if (!code || !name || !akts || !grade || !targetCourseId) {
             alert("Lütfen kaynak ders ve hedef OMÜ ders bilgilerini doldurunuz.");
@@ -420,11 +456,11 @@ const TeacherDashboard = () => {
 
         return (
             <div style={pageStyle}>
-                <Header 
+                <Header
                     userName={currentUser?.fullname || 'Yükleniyor...'}
                     userRole={currentUser?.department || 'Bölüm Yetkilisi'}
                     panelTitle="Bölüm Yetkilisi Yönetim Paneli"
-                    onLogout={handleLogout} 
+                    onLogout={handleLogout}
                 />
                 <div style={containerStyle}>
                     <button
@@ -630,6 +666,7 @@ const TeacherDashboard = () => {
                                             <th style={thStyle}>OMÜ Kredi</th>
                                             <th style={thStyle}>OMÜ AKTS</th>
                                             <th style={thStyle}>OMÜ Harf Notu</th>
+                                            <th style={thStyle}>İşlem</th>
                                         </tr>
                                     </thead>
 
@@ -705,6 +742,7 @@ const TeacherDashboard = () => {
                                                                     <div key={i} style={{ height: '24px' }}>{course.grade || course.externalgrade || '-'}</div>
                                                                 ))}
                                                             </td>
+
                                                         </>
                                                     )}
 
@@ -712,40 +750,48 @@ const TeacherDashboard = () => {
                                                     <td style={{ ...tdStyle, verticalAlign: 'middle' }}>
                                                         {mapping.targetCourse?.courseid ? (
                                                             <>
-                                                                <select
-                                                                    id={`target-${mapping.decisionId}`}
-                                                                    defaultValue={mapping.targetCourse?.courseid}
-                                                                    style={{ padding: '6px', width: '100%' }}
+                                                                <div
+                                                                    style={{
+                                                                        display: 'grid',
+                                                                        gridTemplateColumns: '1fr 34px',
+                                                                        gap: '6px',
+                                                                        alignItems: 'center'
+                                                                    }}
                                                                 >
-                                                                    {Object.keys(groupedCurriculum).map(groupName => (
-                                                                        <optgroup key={groupName} label={groupName}>
-                                                                            {groupedCurriculum[groupName].map(c => (
-                                                                                <option key={c.courseid} value={c.courseid}>
-                                                                                    [{c.coursecode}] {getCleanCourseName(c.coursename)} - Kredi: {c.localcredit || '-'} - {c.akts} AKTS
-                                                                                </option>
-                                                                            ))}
-                                                                        </optgroup>
-                                                                    ))}
-                                                                </select>
+                                                                    <Select
+                                                                        options={courseSelectOptions}
+                                                                        placeholder="Hedef OMÜ dersi seç..."
+                                                                        isSearchable
+                                                                        value={
+                                                                            allCourseOptions.find(
+                                                                                option => String(option.value) === String(mapping.targetCourse?.courseid)
+                                                                            ) || null
+                                                                        }
+                                                                        onChange={(selectedOption) => {
+                                                                            if (!selectedOption) return;
+                                                                            updateTargetCourse(mapping.decisionId || mapping.decisionid, selectedOption.value);
+                                                                        }}
+                                                                        styles={selectStyle}
+                                                                    />
 
-                                                                <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
                                                                     <button
                                                                         type="button"
-                                                                        style={{ ...primaryButton, flex: 2, fontSize: '11px', padding: '4px' }}
-                                                                        onClick={() => {
-                                                                            const selectedTargetId = document.getElementById(`target-${mapping.decisionId}`).value;
-                                                                            updateTargetCourse(mapping.decisionId, selectedTargetId);
+                                                                        onClick={() => deleteTargetCourseDecision(mapping.decisionId || mapping.decisionid)}
+                                                                        title="Bu hedef dersi kaldır"
+                                                                        style={{
+                                                                            width: '34px',
+                                                                            height: '34px',
+                                                                            border: 'none',
+                                                                            borderRadius: '5px',
+                                                                            background: '#dc3545',
+                                                                            color: 'white',
+                                                                            cursor: 'pointer',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center'
                                                                         }}
                                                                     >
-                                                                        Güncelle
-                                                                    </button>
-
-                                                                    <button
-                                                                        type="button"
-                                                                        style={{ ...primaryButton, backgroundColor: '#dc3545', flex: 1, fontSize: '11px', padding: '4px' }}
-                                                                        onClick={() => deleteTargetCourseDecision(mapping.decisionId || mapping.decisionid)}
-                                                                    >
-                                                                        Kaldır
+                                                                        <Trash2 size={15} />
                                                                     </button>
                                                                 </div>
                                                             </>
@@ -757,30 +803,22 @@ const TeacherDashboard = () => {
                                                             <div style={{ marginTop: '12px', borderTop: '2px dashed #004a99', paddingTop: '10px' }}>
                                                                 {activeAddRow === groupIndex ? (
                                                                     <div style={{ background: '#f8f9fa', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}>
-                                                                        <select
-                                                                            id={`extra-target-${mapping.decisionId}`}
-                                                                            style={{ padding: '6px', width: '100%', marginBottom: '6px' }}
-                                                                            defaultValue=""
-                                                                        >
-                                                                            <option value="">OMÜ dersi seç...</option>
-
-                                                                            {Object.keys(groupedCurriculum).map(groupName => (
-                                                                                <optgroup key={groupName} label={groupName}>
-                                                                                    {groupedCurriculum[groupName].map(c => (
-                                                                                        <option key={c.courseid} value={c.courseid}>
-                                                                                            [{c.coursecode}] {getCleanCourseName(c.coursename)} - {c.akts} AKTS
-                                                                                        </option>
-                                                                                    ))}
-                                                                                </optgroup>
-                                                                            ))}
-                                                                        </select>
+                                                                        <Select
+                                                                            options={courseSelectOptions}
+                                                                            placeholder="Ek OMÜ dersi seç..."
+                                                                            isSearchable
+                                                                            onChange={(selectedOption) => {
+                                                                                window[`extraTarget_${mapping.decisionId}`] = selectedOption?.value || '';
+                                                                            }}
+                                                                            styles={selectStyle}
+                                                                        />
 
                                                                         <div style={{ display: 'flex', gap: '6px' }}>
                                                                             <button
                                                                                 type="button"
                                                                                 style={{ ...primaryButton, backgroundColor: '#198754', flex: 1 }}
                                                                                 onClick={() => {
-                                                                                    const extraTargetId = document.getElementById(`extra-target-${mapping.decisionId}`).value;
+                                                                                    const extraTargetId = window[`extraTarget_${mapping.decisionId}`];
                                                                                     addExtraTargetCourse(mapping.decisionId, extraTargetId);
                                                                                 }}
                                                                             >
@@ -847,9 +885,29 @@ const TeacherDashboard = () => {
                                                         )}
                                                     </td>
 
-
-
-
+                                                    {rowIndex === 0 && (
+                                                        <td
+                                                            rowSpan={totalRowsInGroup}
+                                                            style={{
+                                                                ...tdStyle,
+                                                                textAlign: 'center',
+                                                                verticalAlign: 'middle'
+                                                            }}
+                                                        >
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => deleteMappingGroup(group)}
+                                                                style={{
+                                                                    ...primaryButton,
+                                                                    backgroundColor: '#dc3545',
+                                                                    fontSize: '12px',
+                                                                    padding: '6px 10px'
+                                                                }}
+                                                            >
+                                                                Eşleşmeyi Sil
+                                                            </button>
+                                                        </td>
+                                                    )}
 
 
                                                 </tr>
@@ -927,27 +985,15 @@ const TeacherDashboard = () => {
                                                 </select>
                                             </div>
 
-                                            <select
-                                                id="new-target-course"
-                                                style={{
-                                                    padding: '8px',
-                                                    width: '100%',
-                                                    marginBottom: '10px'
+                                            <Select
+                                                options={courseSelectOptions}
+                                                placeholder="Hedef OMÜ dersi seç..."
+                                                isSearchable
+                                                onChange={(selectedOption) => {
+                                                    window.newTargetCourseId = selectedOption?.value || '';
                                                 }}
-                                                defaultValue=""
-                                            >
-                                                <option value="">Hedef OMÜ dersi seç...</option>
-
-                                                {Object.keys(groupedCurriculum).map(groupName => (
-                                                    <optgroup key={groupName} label={groupName}>
-                                                        {groupedCurriculum[groupName].map(c => (
-                                                            <option key={c.courseid} value={c.courseid}>
-                                                                [{c.coursecode}] {getCleanCourseName(c.coursename)} - Kredi: {c.localcredit || '-'} - {c.akts} AKTS
-                                                            </option>
-                                                        ))}
-                                                    </optgroup>
-                                                ))}
-                                            </select>
+                                                styles={selectStyle}
+                                            />
 
                                             <button
                                                 type="button"
@@ -1150,6 +1196,19 @@ const headerBannerStyle = {
     boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
     maxWidth: '1200px',
     margin: '0 auto 20px auto'
+};
+
+const selectStyle = {
+    control: (base) => ({
+        ...base,
+        minHeight: '38px',
+        borderColor: '#ccc',
+        fontSize: '13px'
+    }),
+    menu: (base) => ({
+        ...base,
+        zIndex: 9999
+    })
 };
 
 export default TeacherDashboard;

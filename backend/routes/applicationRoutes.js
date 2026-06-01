@@ -3,6 +3,7 @@ const router = express.Router();
 
 const appController = require('../controllers/applicationController');
 const { verifyToken, checkRole } = require('../middleware/authMiddleware');
+const authMiddleware = require('../middleware/authMiddleware');
 
 
 // ======================================================
@@ -234,6 +235,22 @@ router.get(
     checkRole(['admin']),
     appController.getApplicationDetailForAdmin
 );
+
+router.put(
+    '/admin/department-settings/:id',
+    verifyToken,
+    checkRole(['admin']),
+    appController.updateDepartmentSetting
+);
+
+router.delete(
+    '/admin/department-settings/:id',
+    verifyToken,
+    checkRole(['admin']),
+    appController.deleteDepartmentSetting
+);
+
+
 
 // ======================================================
 // 📄 PDF

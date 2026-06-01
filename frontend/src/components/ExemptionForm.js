@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
+import { User, LogOut } from 'lucide-react';
+import Select from 'react-select';
 
 const ExemptionForm = () => {
     const [curriculum, setCurriculum] = useState([]);
-    const [targetCourseId, setTargetCourseId] = useState('');
+    const [targetCourseIds, setTargetCourseIds] = useState([]);
     const [externalCourses, setExternalCourses] = useState([
         { code: '', name: '', sourceCredit: '', grade: '', akts: '' }
     ]);
@@ -31,11 +33,13 @@ const ExemptionForm = () => {
     const [transcriptFile, setTranscriptFile] = useState(null);
     const [curriculumFile, setCurriculumFile] = useState(null);
     const [internshipFile, setInternshipFile] = useState(null);
+    const [currentUser, setCurrentUser] = useState(null);
 
     useEffect(() => {
         api.get('/auth/me')
             .then(res => {
                 const user = res.data;
+                setCurrentUser(user);
                 // PostgreSQL sütun isimleri genellikle küçük harfle döner
                 setStudentNo(user.studentnumber || user.StudentNumber || '');
                 setStudentName(user.fullname || user.FullName || '');
@@ -111,8 +115,8 @@ const ExemptionForm = () => {
             });
     }, []);
 
-    const selectedOMUCourse = curriculum.find(
-        c => String(c.courseid) === String(targetCourseId)
+    const selectedOMUCourses = curriculum.filter(
+        c => targetCourseIds.map(String).includes(String(c.courseid))
     );
 
     const normalizeCode = (code) => {
@@ -163,6 +167,12 @@ const ExemptionForm = () => {
         return '#856404';
     };
 
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('role');
+        window.location.href = '/login';
+    };
+
     const getOverallApplicationStatus = (mappings = [], applicationStatus = '') => {
         if (applicationStatus === 'Başvuru Sonuçlandı: Olumsuz') {
             return 'Başvuru Sonuçlandı: Olumsuz';
@@ -209,6 +219,7 @@ const ExemptionForm = () => {
         const packageName = getPackageName(course);
         const semesterName = getSemesterName(course);
 
+
         const groupTitle = packageName
             ? `Seçmeli Paket: ${packageName}`
             : `${semesterName}. Dönem Dersleri`;
@@ -220,6 +231,37 @@ const ExemptionForm = () => {
         groups[groupTitle].push(course);
         return groups;
     }, {});
+
+    const getGroupedSubmittedMappings = (mappings = []) => {
+        const groups = {};
+
+        mappings.forEach(mapping => {
+            const externalKey = (mapping.externalCourses || [])
+                .map(c => `${c.code || ''}-${c.name || ''}`)
+                .join('|');
+
+            if (!groups[externalKey]) {
+                groups[externalKey] = {
+                    externalCourses: mapping.externalCourses || [],
+                    targetMappings: []
+                };
+            }
+
+            groups[externalKey].targetMappings.push(mapping);
+        });
+
+        return Object.values(groups);
+    };
+
+    const courseSelectOptions = Object.keys(groupedCurriculum).flatMap(groupName => [
+        {
+            label: groupName,
+            options: groupedCurriculum[groupName].map(c => ({
+                value: c.courseid,
+                label: `[${c.coursecode}] ${getCleanCourseName(c.coursename)} - Kredi: ${c.localcredit || '-'} - ${c.akts} AKTS`
+            }))
+        }
+    ]);
 
     const addExternalRow = () => {
         setExternalCourses([
@@ -316,10 +358,8 @@ const ExemptionForm = () => {
     const handleAddMapping = async (e) => {
         e.preventDefault();
 
-
-
-        if (!targetCourseId) {
-            alert("Lütfen hedef OMÜ dersini seçiniz.");
+        if (targetCourseIds.length === 0) {
+            alert("Lütfen en az bir hedef OMÜ dersi seçiniz.");
             return;
         }
 
@@ -332,50 +372,52 @@ const ExemptionForm = () => {
             return;
         }
 
-        const prerequisite = getPrerequisite(selectedOMUCourse);
+        for (const selectedOMUCourse of selectedOMUCourses) {
+            const prerequisite = getPrerequisite(selectedOMUCourse);
 
-        if (prerequisite) {
-            const prerequisiteList = prerequisite
-                .split(',')
-                .map(p => p.trim())
-                .filter(Boolean);
+            if (prerequisite) {
+                const prerequisiteList = prerequisite
+                    .split(',')
+                    .map(p => p.trim())
+                    .filter(Boolean);
 
-            const missingPrerequisites = prerequisiteList.filter(prereq =>
-                !savedMappings.some(mapping =>
-                    normalizeCode(mapping.targetCourse?.coursecode) === normalizeCode(prereq)
-                )
-            );
-
-            if (missingPrerequisites.length > 0) {
-                const continueAdd = window.confirm(
-                    `${selectedOMUCourse?.coursecode} - ${getCleanCourseName(selectedOMUCourse?.coursename)} dersi için ön koşul bulunmaktadır.\n\n` +
-                    `Eksik ön koşullar: ${missingPrerequisites.join(', ')}\n\n` +
-                    `Sistem seçimi engellemez; nihai karar komisyon tarafından verilecektir.\n\n` +
-                    `Yine de taslağa eklemek istiyor musunuz?`
+                const missingPrerequisites = prerequisiteList.filter(prereq =>
+                    !savedMappings.some(mapping =>
+                        normalizeCode(mapping.targetCourse?.coursecode) === normalizeCode(prereq)
+                    )
                 );
 
-                if (!continueAdd) {
-                    return;
+                if (missingPrerequisites.length > 0) {
+                    const continueAdd = window.confirm(
+                        `${selectedOMUCourse?.coursecode} - ${getCleanCourseName(selectedOMUCourse?.coursename)} dersi için ön koşul bulunmaktadır.\n\n` +
+                        `Eksik ön koşullar: ${missingPrerequisites.join(', ')}\n\n` +
+                        `Sistem seçimi engellemez; nihai karar komisyon tarafından verilecektir.\n\n` +
+                        `Yine de taslağa eklemek istiyor musunuz?`
+                    );
+
+                    if (!continueAdd) return;
                 }
             }
         }
 
-        const newMapping = {
-            targetCourse: selectedOMUCourse,
-            targetCourseId,
+        const newMappings = selectedOMUCourses.map(course => ({
+            targetCourse: course,
+            targetCourseId: course.courseid,
             externalCourses: [...externalCourses]
-        };
+        }));
 
         setSavedMappings([
             ...savedMappings,
-            newMapping
+            ...newMappings
         ]);
 
-        setWarnings(checkWarnings(newMapping));
+        setWarnings(
+            newMappings.flatMap(mapping => checkWarnings(mapping))
+        );
 
         alert("Ders eşleştirmesi başvuruya eklendi.");
 
-        setTargetCourseId('');
+        setTargetCourseIds([]);
         setSelectionWarning('');
         setExternalCourses([
             { code: '', name: '', sourceCredit: '', grade: '', akts: '' }
@@ -562,6 +604,18 @@ const ExemptionForm = () => {
         marginBottom: '5px'
     };
 
+    const headerBannerStyle = {
+        backgroundColor: 'white',
+        border: '1px solid #ddd',
+        borderRadius: '8px',
+        padding: '20px',
+        marginBottom: '20px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+    };
+
     const gridTwo = {
         display: 'grid',
         gridTemplateColumns: '1fr 1fr',
@@ -572,18 +626,78 @@ const ExemptionForm = () => {
         return (
             <div style={{ backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '25px' }}>
                 <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-                    <div style={{
-                        backgroundColor: 'white',
-                        padding: '20px',
-                        borderRadius: '8px',
-                        border: '1px solid #ddd',
-                        marginBottom: '20px',
-                        textAlign: 'center'
-                    }}>
-                        <h2 style={{ color: '#198754', marginBottom: '5px' }}>
-                            Başvuru Özeti
-                        </h2>
+                    <div style={headerBannerStyle}>
+                        <div>
+                            <h3 style={{ margin: '4px' }}>
+                                T.C. ONDOKUZ MAYIS ÜNİVERSİTESİ
+                            </h3>
 
+                            <h2 style={{
+                                margin: '4px',
+                                color: '#004a99'
+                            }}>
+                                Ders Saydırma ve Muafiyet Sistemi
+                            </h2>
+
+                            <p style={{
+                                margin: '4px',
+                                color: '#666'
+                            }}>
+                                Başvuru Özeti
+                            </p>
+                        </div>
+
+                        {currentUser && (
+                            <div style={{
+                                textAlign: 'right',
+                                background: '#f8f9fa',
+                                padding: '10px 15px',
+                                border: '1px solid #eee',
+                                borderRadius: '6px'
+                            }}>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'flex-end',
+                                    gap: '8px',
+                                    color: '#333',
+                                    fontWeight: 'bold'
+                                }}>
+                                    <User size={18} color="#004a99" />
+                                    {currentUser.fullname || currentUser.FullName}
+                                </div>
+
+                                <div style={{
+                                    color: '#666',
+                                    fontSize: '13px',
+                                    marginTop: '4px',
+                                    marginBottom: '8px'
+                                }}>
+                                    {currentUser.department || currentUser.Department}
+                                    {' - Öğrenci'}
+                                </div>
+
+                                <button
+                                    onClick={handleLogout}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                        padding: '5px 10px',
+                                        background: '#dc3545',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '12px',
+                                        marginLeft: 'auto'
+                                    }}
+                                >
+                                    <LogOut size={14} />
+                                    Çıkış Yap
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <div style={sectionStyle}>
@@ -743,46 +857,169 @@ const ExemptionForm = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {submittedApplication.mappings.map((mapping, index) => (
-                                    <tr key={index}>
-                                        <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{index + 1}</td>
-                                        <td style={{ border: '1px solid #ddd', padding: '8px' }}>
-                                            {mapping.externalCourses.map((course, i) => (
-                                                <div key={i}>{course.code} - {course.name}</div>
+                                {getGroupedSubmittedMappings(submittedApplication.mappings).map((group, index) => (
+                                    <tr
+                                        key={index}
+                                        style={{
+                                            borderTop: index === 0 ? 'none' : '2px solid #666'
+                                        }}
+                                    >
+                                        <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
+                                            {index + 1}
+                                        </td>
+
+                                        <td style={{ border: '1px solid #ddd', padding: '0' }}>
+                                            {group.externalCourses.map((course, i) => (
+                                                <div
+                                                    key={i}
+                                                    style={{
+                                                        padding: '8px',
+                                                        borderBottom:
+                                                            i !== group.externalCourses.length - 1
+                                                                ? '1px solid #ddd'
+                                                                : 'none'
+                                                    }}
+                                                >
+                                                    {course.code} - {course.name}
+                                                </div>
                                             ))}
                                         </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
-                                            {mapping.externalCourses.map((course, i) => (
-                                                <div key={i}>{course.sourceCredit || '-'}</div>
+                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                            {group.externalCourses.map((course, i) => (
+                                                <div
+                                                    key={i}
+                                                    style={{
+                                                        padding: '8px',
+                                                        borderBottom:
+                                                            i !== group.externalCourses.length - 1
+                                                                ? '1px solid #ddd'
+                                                                : 'none'
+                                                    }}
+                                                >
+                                                    {course.sourceCredit || '-'}
+                                                </div>
                                             ))}
                                         </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
-                                            {mapping.externalCourses.map((course, i) => (
-                                                <div key={i}>{course.akts || '-'}</div>
+                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                            {group.externalCourses.map((course, i) => (
+                                                <div
+                                                    key={i}
+                                                    style={{
+                                                        padding: '8px',
+                                                        borderBottom:
+                                                            i !== group.externalCourses.length - 1
+                                                                ? '1px solid #ddd'
+                                                                : 'none'
+                                                    }}
+                                                >
+                                                    {course.akts || '-'}
+                                                </div>
                                             ))}
                                         </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>
-                                            {mapping.externalCourses.map((course, i) => (
-                                                <div key={i}>{course.grade || '-'}</div>
+                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center', fontWeight: 'bold' }}>
+                                            {group.externalCourses.map((course, i) => (
+                                                <div
+                                                    key={i}
+                                                    style={{
+                                                        padding: '8px',
+                                                        borderBottom:
+                                                            i !== group.externalCourses.length - 1
+                                                                ? '1px solid #ddd'
+                                                                : 'none'
+                                                    }}
+                                                >
+                                                    {course.grade || '-'}
+                                                </div>
                                             ))}
                                         </td>
-                                        <td style={{ border: '1px solid #ddd', padding: '8px' }}>
-                                            {mapping.targetCourse?.coursecode} - {getCleanCourseName(mapping.targetCourse?.coursename)}
-                                        </td>
-                                        <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
-                                            {mapping.targetCourse?.localcredit || '-'}
-                                        </td>
-                                        <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
-                                            {mapping.targetCourse?.akts || '-'}
-                                        </td>
-                                        <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>
-                                            {mapping.finalGrade || '-'}
+
+                                        <td style={{ border: '1px solid #ddd', padding: '0' }}>
+                                            {group.targetMappings.map((mapping, i) => (
+                                                <div
+                                                    key={i}
+                                                    style={{
+                                                        padding: '8px',
+                                                        minHeight: '48px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        borderBottom:
+                                                            i !== group.targetMappings.length - 1
+                                                                ? '1px solid #ddd'
+                                                                : 'none'
+                                                    }}
+                                                >
+                                                    {mapping.targetCourse?.coursecode}
+                                                    {' - '}
+                                                    {getCleanCourseName(mapping.targetCourse?.coursename)}
+                                                </div>
+                                            ))}
                                         </td>
 
+                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                            {group.targetMappings.map((mapping, i) => (
+                                                <div
+                                                    key={i}
+                                                    style={{
+                                                        padding: '8px',
+                                                        minHeight: '48px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        borderBottom:
+                                                            i !== group.targetMappings.length - 1
+                                                                ? '1px solid #ddd'
+                                                                : 'none'
+                                                    }}
+                                                >
+                                                    {mapping.targetCourse?.localcredit || '-'}
+                                                </div>
+                                            ))}
+                                        </td>
 
+                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                            {group.targetMappings.map((mapping, i) => (
+                                                <div
+                                                    key={i}
+                                                    style={{
+                                                        padding: '8px',
+                                                        minHeight: '48px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        borderBottom:
+                                                            i !== group.targetMappings.length - 1
+                                                                ? '1px solid #ddd'
+                                                                : 'none'
+                                                    }}
+                                                >
+                                                    {mapping.targetCourse?.akts || '-'}
+                                                </div>
+                                            ))}
+                                        </td>
+
+                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                            {group.targetMappings.map((mapping, i) => (
+                                                <div
+                                                    key={i}
+                                                    style={{
+                                                        padding: '8px',
+                                                        minHeight: '48px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        borderBottom:
+                                                            i !== group.targetMappings.length - 1
+                                                                ? '1px solid #ddd'
+                                                                : 'none'
+                                                    }}
+                                                >
+                                                    {mapping.finalGrade || '-'}
+                                                </div>
+                                            ))}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -923,17 +1160,78 @@ const ExemptionForm = () => {
     return (
         <div style={{ backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '25px' }}>
             <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-                <div style={{
-                    textAlign: 'center',
-                    backgroundColor: 'white',
-                    padding: '15px',
-                    border: '1px solid #ddd',
-                    borderRadius: '8px',
-                    marginBottom: '20px'
-                }}>
-                    <h3 style={{ margin: '4px' }}>T.C. ONDOKUZ MAYIS ÜNİVERSİTESİ</h3>
-                    <h2 style={{ margin: '4px', color: '#004a99' }}>Ders Saydırma ve Muafiyet Sistemi</h2>
-                    <p style={{ margin: '4px', color: '#666' }}>Yeni Muafiyet Başvurusu</p>
+                <div style={headerBannerStyle}>
+                    <div>
+                        <h3 style={{ margin: '4px' }}>
+                            T.C. ONDOKUZ MAYIS ÜNİVERSİTESİ
+                        </h3>
+
+                        <h2 style={{
+                            margin: '4px',
+                            color: '#004a99'
+                        }}>
+                            Ders Saydırma ve Muafiyet Sistemi
+                        </h2>
+
+                        <p style={{
+                            margin: '4px',
+                            color: '#666'
+                        }}>
+                            Yeni Muafiyet Başvurusu
+                        </p>
+                    </div>
+
+                    {currentUser && (
+                        <div style={{
+                            textAlign: 'right',
+                            background: '#f8f9fa',
+                            padding: '10px 15px',
+                            border: '1px solid #eee',
+                            borderRadius: '6px'
+                        }}>
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'flex-end',
+                                gap: '8px',
+                                color: '#333',
+                                fontWeight: 'bold'
+                            }}>
+                                <User size={18} color="#004a99" />
+                                {currentUser.fullname || currentUser.FullName}
+                            </div>
+
+                            <div style={{
+                                color: '#666',
+                                fontSize: '13px',
+                                marginTop: '4px',
+                                marginBottom: '8px'
+                            }}>
+                                {currentUser.department || currentUser.Department}
+                                {' - Öğrenci'}
+                            </div>
+
+                            <button
+                                onClick={handleLogout}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    padding: '5px 10px',
+                                    background: '#dc3545',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    marginLeft: 'auto'
+                                }}
+                            >
+                                <LogOut size={14} />
+                                Çıkış Yap
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 <form onSubmit={handleAddMapping}>
@@ -1088,47 +1386,65 @@ const ExemptionForm = () => {
 
                         <div style={{ marginBottom: '15px' }}>
                             <label style={labelStyle}>Hedef OMÜ Dersi</label>
-                            <select
-                                style={inputStyle}
-                                value={targetCourseId}
-                                onChange={(e) => {
-                                    const selectedId = e.target.value;
-                                    setTargetCourseId(selectedId);
+                            <Select
+                                options={courseSelectOptions}
+                                placeholder="Müfredattan ders seçin..."
+                                isSearchable
+                                isMulti
+                                closeMenuOnSelect={false}
+                                value={
+                                    courseSelectOptions
+                                        .flatMap(group => group.options)
+                                        .filter(option => targetCourseIds.map(String).includes(String(option.value)))
+                                }
+                                onChange={(selectedOptions) => {
+                                    const selectedIds = selectedOptions
+                                        ? selectedOptions.map(option => option.value)
+                                        : [];
 
-                                    const selectedCourse = curriculum.find(
-                                        c => String(c.courseid) === String(selectedId)
+                                    setTargetCourseIds(selectedIds);
+
+                                    const selectedCourses = curriculum.filter(
+                                        c => selectedIds.map(String).includes(String(c.courseid))
                                     );
 
-                                    const selectedPackage = getPackageName(selectedCourse);
+                                    const warningMessages = [];
 
-                                    if (selectedPackage) {
-                                        const alreadySelected = savedMappings.find(mapping =>
-                                            getPackageName(mapping.targetCourse) === selectedPackage
-                                        );
+                                    selectedCourses.forEach(selectedCourse => {
+                                        const selectedPackage = getPackageName(selectedCourse);
 
-                                        if (alreadySelected) {
-                                            setSelectionWarning(
-                                                `${selectedPackage} paketinden daha önce "${getCleanCourseName(alreadySelected.targetCourse?.coursename)}" dersini seçtiniz. Aynı seçmeli paketten ikinci ders seçiyorsunuz. Nihai karar komisyon tarafından verilecektir.`
+                                        if (selectedPackage) {
+                                            const alreadySelected = savedMappings.find(mapping =>
+                                                getPackageName(mapping.targetCourse) === selectedPackage
                                             );
-                                        } else {
-                                            setSelectionWarning('');
+
+                                            const samePackageInCurrentSelection = selectedCourses.filter(course =>
+                                                getPackageName(course) === selectedPackage
+                                            );
+
+                                            if (alreadySelected || samePackageInCurrentSelection.length > 1) {
+                                                warningMessages.push(
+                                                    `${selectedPackage} paketinden birden fazla ders seçildi. Nihai karar komisyon tarafından verilecektir.`
+                                                );
+                                            }
                                         }
-                                    } else {
-                                        setSelectionWarning('');
-                                    }
+                                    });
+
+                                    setSelectionWarning([...new Set(warningMessages)].join(' '));
                                 }}
-                            >
-                                <option value="">Müfredattan ders seçin...</option>
-                                {Object.keys(groupedCurriculum).map(groupName => (
-                                    <optgroup key={groupName} label={groupName}>
-                                        {groupedCurriculum[groupName].map(c => (
-                                            <option key={c.courseid} value={c.courseid}>
-                                                [{c.coursecode}] {getCleanCourseName(c.coursename)} - Kredi: {c.localcredit || '-'} - {c.akts} AKTS
-                                            </option>
-                                        ))}
-                                    </optgroup>
-                                ))}
-                            </select>
+                                styles={{
+                                    control: (base) => ({
+                                        ...base,
+                                        minHeight: '39px',
+                                        borderColor: '#ccc',
+                                        fontSize: '14px'
+                                    }),
+                                    menu: (base) => ({
+                                        ...base,
+                                        zIndex: 9999
+                                    })
+                                }}
+                            />
 
                             {selectionWarning && (
                                 <div style={{
@@ -1302,63 +1618,155 @@ const ExemptionForm = () => {
                             </thead>
 
                             <tbody>
-                                {savedMappings.map((mapping, index) => (
-                                    <tr key={index}>
+                                {getGroupedSubmittedMappings(savedMappings).map((group, index) => (
+                                    <tr
+                                        key={index}
+                                        style={{
+                                            borderTop: index === 0 ? 'none' : '2px solid #666'
+                                        }}
+                                    >
                                         <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
                                             {index + 1}
                                         </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '8px' }}>
-                                            {mapping.externalCourses.map((course, i) => (
-                                                <div key={i}>{course.code} - {course.name}</div>
+                                        <td style={{ border: '1px solid #ddd', padding: '0' }}>
+                                            {group.externalCourses.map((course, i) => (
+                                                <div
+                                                    key={i}
+                                                    style={{
+                                                        padding: '8px',
+                                                        borderBottom: i !== group.externalCourses.length - 1 ? '1px solid #ddd' : 'none'
+                                                    }}
+                                                >
+                                                    {course.code} - {course.name}
+                                                </div>
                                             ))}
                                         </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
-                                            {mapping.externalCourses.map((course, i) => (
-                                                <div key={i}>{course.sourceCredit || '-'}</div>
+                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                            {group.externalCourses.map((course, i) => (
+                                                <div
+                                                    key={i}
+                                                    style={{
+                                                        padding: '8px',
+                                                        borderBottom: i !== group.externalCourses.length - 1 ? '1px solid #ddd' : 'none'
+                                                    }}
+                                                >
+                                                    {course.sourceCredit || '-'}
+                                                </div>
                                             ))}
                                         </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
-                                            {mapping.externalCourses.map((course, i) => (
-                                                <div key={i}>{course.akts || '-'}</div>
+                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                            {group.externalCourses.map((course, i) => (
+                                                <div
+                                                    key={i}
+                                                    style={{
+                                                        padding: '8px',
+                                                        borderBottom: i !== group.externalCourses.length - 1 ? '1px solid #ddd' : 'none'
+                                                    }}
+                                                >
+                                                    {course.akts || '-'}
+                                                </div>
                                             ))}
                                         </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>
-                                            {mapping.externalCourses.map((course, i) => (
-                                                <div key={i}>{course.grade || '-'}</div>
+                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center', fontWeight: 'bold' }}>
+                                            {group.externalCourses.map((course, i) => (
+                                                <div
+                                                    key={i}
+                                                    style={{
+                                                        padding: '8px',
+                                                        borderBottom: i !== group.externalCourses.length - 1 ? '1px solid #ddd' : 'none'
+                                                    }}
+                                                >
+                                                    {course.grade || '-'}
+                                                </div>
                                             ))}
                                         </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '8px' }}>
-                                            {mapping.targetCourse?.coursecode} - {getCleanCourseName(mapping.targetCourse?.coursename)}
+                                        <td style={{ border: '1px solid #ddd', padding: '0' }}>
+                                            {group.targetMappings.map((mapping, i) => (
+                                                <div
+                                                    key={i}
+                                                    style={{
+                                                        padding: '8px',
+                                                        minHeight: '42px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        borderBottom: i !== group.targetMappings.length - 1 ? '1px solid #ddd' : 'none'
+                                                    }}
+                                                >
+                                                    {mapping.targetCourse?.coursecode} - {getCleanCourseName(mapping.targetCourse?.coursename)}
+                                                </div>
+                                            ))}
                                         </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
-                                            {mapping.targetCourse?.localcredit || '-'}
+                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                            {group.targetMappings.map((mapping, i) => (
+                                                <div
+                                                    key={i}
+                                                    style={{
+                                                        padding: '8px',
+                                                        minHeight: '42px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        borderBottom: i !== group.targetMappings.length - 1 ? '1px solid #ddd' : 'none'
+                                                    }}
+                                                >
+                                                    {mapping.targetCourse?.localcredit || '-'}
+                                                </div>
+                                            ))}
                                         </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
-                                            {mapping.targetCourse?.akts || '-'}
+                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                            {group.targetMappings.map((mapping, i) => (
+                                                <div
+                                                    key={i}
+                                                    style={{
+                                                        padding: '8px',
+                                                        minHeight: '42px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        borderBottom: i !== group.targetMappings.length - 1 ? '1px solid #ddd' : 'none'
+                                                    }}
+                                                >
+                                                    {mapping.targetCourse?.akts || '-'}
+                                                </div>
+                                            ))}
                                         </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
-                                            <button
-                                                type="button"
-                                                onClick={() => removeMapping(index)}
-                                                style={{
-                                                    padding: '6px 10px',
-                                                    background: '#dc3545',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: '4px',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                Sil
-                                            </button>
+                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                            {group.targetMappings.map((mapping, i) => (
+                                                <div
+                                                    key={i}
+                                                    style={{
+                                                        padding: '6px',
+                                                        minHeight: '42px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        borderBottom: i !== group.targetMappings.length - 1 ? '1px solid #ddd' : 'none'
+                                                    }}
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeMapping(savedMappings.findIndex(item => item === mapping))}
+                                                        style={{
+                                                            padding: '6px 10px',
+                                                            background: '#dc3545',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: '4px',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        Sil
+                                                    </button>
+                                                </div>
+                                            ))}
                                         </td>
                                     </tr>
                                 ))}

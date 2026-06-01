@@ -1161,17 +1161,14 @@ exports.deleteDecision = async (req, res) => {
 
         const applicationId = decisionResult.rows[0].applicationid;
 
-        // Kararı silmiyoruz, sadece hedef OMÜ dersini kaldırıyoruz
+        // Kararı tamamen sil
         await db.query(
-            `UPDATE ExemptionDecisions
-             SET TargetCourseID = NULL,
-                 IsApproved = NULL,
-                 FinalGrade = NULL,
-                 ReviewNote = NULL
+            `DELETE FROM ExemptionDecisions
              WHERE DecisionID = $1`,
             [decisionId]
         );
 
+        // Başvuruda hedef OMÜ dersi kalmış mı kontrol et
         const remainingTargetCourses = await db.query(
             `SELECT COUNT(*) AS count
              FROM ExemptionDecisions
@@ -1187,11 +1184,18 @@ exports.deleteDecision = async (req, res) => {
                  WHERE ApplicationID = $1`,
                 [applicationId]
             );
+        } else {
+            await db.query(
+                `UPDATE Applications
+                 SET Status = 'Başvuru Sonuçlandı: Olumlu'
+                 WHERE ApplicationID = $1`,
+                [applicationId]
+            );
         }
 
         res.json({
             status: "success",
-            message: "Hedef OMÜ dersi kaldırıldı, kaynak ders korundu."
+            message: "Hedef OMÜ dersi başarıyla silindi."
         });
 
     } catch (err) {
@@ -1975,6 +1979,80 @@ exports.getApplicationDetailForAdmin = async (req, res) => {
     } catch (err) {
         res.status(500).json({
             status: "error",
+            message: err.message
+        });
+    }
+};
+
+exports.updateDepartmentSetting = async (req, res) => {
+    const { id } = req.params;
+
+    const {
+        faculty,
+        department,
+        commissionMember1,
+        commissionMember2,
+        commissionMember3,
+        commissionPresident,
+        departmentHead
+    } = req.body;
+
+    try {
+        await db.query(
+            `UPDATE DepartmentSettings
+             SET Faculty = $1,
+                 Department = $2,
+                 CommissionMember1 = $3,
+                 CommissionMember2 = $4,
+                 CommissionMember3 = $5,
+                 CommissionPresident = $6,
+                 DepartmentHead = $7
+             WHERE SettingID = $8`,
+            [
+                faculty,
+                department,
+                commissionMember1,
+                commissionMember2,
+                commissionMember3,
+                commissionPresident,
+                departmentHead,
+                id
+            ]
+        );
+
+        res.json({
+            status: 'success',
+            message: 'İmza bilgileri güncellendi.'
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({
+            status: 'error',
+            message: err.message
+        });
+    }
+};
+
+exports.deleteDepartmentSetting = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        await db.query(
+            `DELETE FROM DepartmentSettings
+             WHERE SettingID = $1`,
+            [id]
+        );
+
+        res.json({
+            status: 'success',
+            message: 'İmza bilgileri silindi.'
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({
+            status: 'error',
             message: err.message
         });
     }

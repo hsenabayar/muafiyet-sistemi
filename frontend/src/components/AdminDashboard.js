@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api';
+import { User, LogOut } from 'lucide-react';
 
 const AdminDashboard = () => {
     const [activeTab, setActiveTab] = useState('users');
@@ -10,7 +11,10 @@ const AdminDashboard = () => {
     const [departmentSettings, setDepartmentSettings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedUserRole, setSelectedUserRole] = useState('all');
+    const [userSearch, setUserSearch] = useState('');
+    const [courseSearch, setCourseSearch] = useState('');
     const [selectedApplication, setSelectedApplication] = useState(null);
+    const [currentUser, setCurrentUser] = useState(null);
 
     const [newUser, setNewUser] = useState({
         username: '',
@@ -49,13 +53,16 @@ const AdminDashboard = () => {
 
     const loadAdminData = async () => {
         try {
-            const [statsRes, usersRes, appsRes, curriculumRes, settingsRes] = await Promise.all([
+            const [statsRes, usersRes, appsRes, curriculumRes, settingsRes, meRes] = await Promise.all([
                 api.get('/applications/admin/stats'),
                 api.get('/applications/admin/users'),
                 api.get('/applications/admin/applications'),
                 api.get('/applications/curriculum'),
-                api.get('/applications/admin/department-settings')
+                api.get('/applications/admin/department-settings'),
+                api.get('/auth/me')
             ]);
+
+            setCurrentUser(meRes.data);
 
             setStats(statsRes.data.data);
             setUsers(usersRes.data.data || []);
@@ -92,6 +99,7 @@ const AdminDashboard = () => {
     const updateUser = async (user) => {
         try {
             await api.put(`/applications/admin/users/${user.userid}`, {
+                username: user.username,
                 fullname: user.fullname,
                 role: user.role,
                 studentNumber: user.studentnumber,
@@ -229,6 +237,43 @@ const AdminDashboard = () => {
         setCurriculum(copy);
     };
 
+    const updateSettingField = (index, field, value) => {
+        const copy = [...departmentSettings];
+        copy[index][field] = value;
+        setDepartmentSettings(copy);
+    };
+
+    const updateSetting = async (setting) => {
+        try {
+            await api.put(`/applications/admin/department-settings/${setting.settingid}`, {
+                faculty: setting.faculty,
+                department: setting.department,
+                commissionMember1: setting.commissionmember1,
+                commissionMember2: setting.commissionmember2,
+                commissionMember3: setting.commissionmember3,
+                commissionPresident: setting.commissionpresident,
+                departmentHead: setting.departmenthead
+            });
+
+            alert('İmza bilgileri güncellendi.');
+            loadAdminData();
+        } catch (err) {
+            alert(err.response?.data?.message || 'İmza bilgileri güncellenemedi.');
+        }
+    };
+
+    const deleteSetting = async (settingId) => {
+        if (!window.confirm('Bu komisyon/imza kaydını silmek istediğine emin misin?')) return;
+
+        try {
+            await api.delete(`/applications/admin/department-settings/${settingId}`);
+            alert('İmza bilgileri silindi.');
+            loadAdminData();
+        } catch (err) {
+            alert(err.response?.data?.message || 'İmza bilgileri silinemedi.');
+        }
+    };
+
     const openApplicationDetail = async (applicationId) => {
         try {
             const res = await api.get(`/applications/admin/applications/${applicationId}`);
@@ -260,10 +305,57 @@ const AdminDashboard = () => {
         }
     };
 
-    const filteredUsers =
-        selectedUserRole === 'all'
-            ? users
-            : users.filter(user => user.role === selectedUserRole);
+    const handleLogout = () => {
+        localStorage.clear();
+        window.location.href = '/login';
+    };
+
+    const roleOptions = [
+        { value: 'student', label: 'Öğrenci' },
+        { value: 'teacher', label: 'Bölüm Yetkilisi' },
+        { value: 'commission', label: 'Öğrenci İşleri' },
+        { value: 'admin', label: 'Sistem Yöneticisi' }
+    ];
+
+    const getRoleLabel = (role) => {
+        const found = roleOptions.find(item => item.value === role);
+        return found ? found.label : role;
+    };
+
+
+    const normalizeText = (text) =>
+        String(text ?? '')
+            .toLocaleLowerCase('tr-TR')
+            .trim();
+
+    const filteredUsers = users.filter(user => {
+        const roleMatch =
+            selectedUserRole === 'all' ||
+            user.role === selectedUserRole;
+
+        const searchTerm = normalizeText(userSearch);
+
+        const searchMatch =
+            normalizeText(user.username).includes(searchTerm) ||
+            normalizeText(user.fullname).includes(searchTerm) ||
+            normalizeText(user.department).includes(searchTerm) ||
+            normalizeText(user.faculty).includes(searchTerm) ||
+            normalizeText(user.tckimlikno).includes(searchTerm);
+
+        return roleMatch && searchMatch;
+    });
+
+    const filteredCourses = curriculum.filter(course => {
+        const searchTerm = normalizeText(courseSearch);
+
+        return (
+            normalizeText(course.coursecode).includes(searchTerm) ||
+            normalizeText(course.coursename).includes(searchTerm) ||
+            normalizeText(course.semester).includes(searchTerm) ||
+            normalizeText(course.coursetype).includes(searchTerm) ||
+            normalizeText(course.prerequisitecode).includes(searchTerm)
+        );
+    });
 
     if (loading) {
         return <div style={{ padding: '30px' }}>Admin paneli yükleniyor...</div>;
@@ -272,7 +364,73 @@ const AdminDashboard = () => {
     return (
         <div style={pageStyle}>
             <div style={containerStyle}>
-                <h2 style={{ color: '#004a99' }}>Admin Paneli</h2>
+                <div style={headerBannerStyle}>
+                    <div>
+                        <h3 style={{ margin: '4px' }}>
+                            T.C. ONDOKUZ MAYIS ÜNİVERSİTESİ
+                        </h3>
+
+                        <h2 style={{ margin: '4px', color: '#004a99' }}>
+                            Ders Saydırma ve Muafiyet Sistemi
+                        </h2>
+
+                        <p style={{ margin: '4px', color: '#666' }}>
+                            Sistem Yöneticisi Paneli
+                        </p>
+                    </div>
+
+                    {currentUser && (
+                        <div style={{
+                            textAlign: 'right',
+                            background: '#f8f9fa',
+                            padding: '10px 15px',
+                            border: '1px solid #eee',
+                            borderRadius: '6px'
+                        }}>
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'flex-end',
+                                gap: '8px',
+                                color: '#333',
+                                fontWeight: 'bold',
+                                fontSize: '15px'
+                            }}>
+                                <User size={18} color="#004a99" />
+                                {currentUser.fullname || currentUser.FullName || 'Sistem Yöneticisi'}
+                            </div>
+
+                            <div style={{
+                                color: '#666',
+                                fontSize: '13px',
+                                marginTop: '4px',
+                                marginBottom: '8px'
+                            }}>
+                                Bilgi İşlem Daire Başkanlığı - Sistem Yöneticisi
+                            </div>
+
+                            <button
+                                onClick={handleLogout}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    padding: '5px 10px',
+                                    background: '#dc3545',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    marginLeft: 'auto'
+                                }}
+                            >
+                                <LogOut size={14} />
+                                Çıkış Yap
+                            </button>
+                        </div>
+                    )}
+                </div>
 
                 <div style={tabBar}>
                     <button style={tabStyle(activeTab === 'users')} onClick={() => setActiveTab('users')}>Kullanıcı Yönetimi</button>
@@ -289,7 +447,7 @@ const AdminDashboard = () => {
                             <div style={cardStyle}>
                                 <h4>Kullanıcı Rolleri</h4>
                                 {stats?.usersByRole?.map(item => (
-                                    <p key={item.role}><b>{item.role}:</b> {item.count}</p>
+                                    <p key={item.role}><b>{getRoleLabel(item.role)}:</b> {item.count}</p>
                                 ))}
                             </div>
 
@@ -308,34 +466,132 @@ const AdminDashboard = () => {
                         <h3>Kullanıcı Yönetimi</h3>
 
                         <h4>Yeni Kullanıcı Oluştur</h4>
-                        <div style={formGrid}>
-                            <input placeholder="Kullanıcı adı" value={newUser.username} onChange={e => setNewUser({ ...newUser, username: e.target.value })} style={inputStyle} />
-                            <input placeholder="Geçici şifre" value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} style={inputStyle} />
-                            <input placeholder="Ad Soyad" value={newUser.fullname} onChange={e => setNewUser({ ...newUser, fullname: e.target.value })} style={inputStyle} />
+                        <div style={userCreateBox}>
+                            <div style={formGridTwo}>
+                                <div>
+                                    <label style={formLabel}>Ad Soyad</label>
+                                    <input
+                                        placeholder="Ad Soyad"
+                                        value={newUser.fullname}
+                                        onChange={e => setNewUser({ ...newUser, fullname: e.target.value })}
+                                        style={inputStyle}
+                                    />
+                                </div>
 
-                            <select value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })} style={inputStyle}>
-                                <option value="student">Öğrenci</option>
-                                <option value="teacher">Bölüm Yetkilisi</option>
-                                <option value="commission">Öğrenci İşleri</option>
-                                <option value="admin">Admin</option>
-                            </select>
 
-                            <input placeholder="Öğrenci No" value={newUser.studentNumber} onChange={e => setNewUser({ ...newUser, studentNumber: e.target.value })} style={inputStyle} />
-                            <input placeholder="T.C. Kimlik No" value={newUser.tcKimlikNo} onChange={e => setNewUser({ ...newUser, tcKimlikNo: e.target.value })} style={inputStyle} />
-                            <input placeholder="Fakülte" value={newUser.faculty} onChange={e => setNewUser({ ...newUser, faculty: e.target.value })} style={inputStyle} />
-                            <input placeholder="Bölüm" value={newUser.department} onChange={e => setNewUser({ ...newUser, department: e.target.value })} style={inputStyle} />
+                                <div>
+                                    <label style={formLabel}>Rol</label>
+                                    <select
+                                        value={newUser.role}
+                                        onChange={e => setNewUser({ ...newUser, role: e.target.value })}
+                                        style={inputStyle}
+                                    >
+                                        {roleOptions.map(role => (
+                                            <option key={role.value} value={role.value}>
+                                                {role.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label style={formLabel}>
+                                        {newUser.role === 'student' ? 'Kullanıcı Adı / Öğrenci No' : 'Kullanıcı Adı'}
+                                    </label>
+                                    <input
+                                        placeholder={newUser.role === 'student' ? 'Kullanıcı adı' : 'Kullanıcı adı'}
+                                        value={newUser.username}
+                                        onChange={e => setNewUser({ ...newUser, username: e.target.value })}
+                                        style={inputStyle}
+                                    />
+                                </div>
+
+
+
+
+
+                                {(newUser.role === 'student' || newUser.role === 'teacher') && (
+                                    <div>
+                                        <label style={formLabel}>Bölüm</label>
+                                        <input
+                                            placeholder="Bölüm"
+                                            value={newUser.department}
+                                            onChange={e => setNewUser({ ...newUser, department: e.target.value })}
+                                            style={inputStyle}
+                                        />
+                                    </div>
+                                )}
+
+
+                                <div>
+                                    <label style={formLabel}>T.C. Kimlik No</label>
+                                    <input
+                                        placeholder="T.C. Kimlik No"
+                                        value={newUser.tcKimlikNo}
+                                        onChange={e => setNewUser({ ...newUser, tcKimlikNo: e.target.value })}
+                                        style={inputStyle}
+                                    />
+                                </div>
+
+
+                                {newUser.role !== 'admin' && (
+                                    <div>
+                                        <label style={formLabel}>Fakülte</label>
+                                        <input
+                                            placeholder="Fakülte"
+                                            value={newUser.faculty}
+                                            onChange={e => setNewUser({ ...newUser, faculty: e.target.value })}
+                                            style={inputStyle}
+                                        />
+                                    </div>
+
+
+                                )}
+
+                                <div>
+                                    <label style={formLabel}>Geçici Şifre</label>
+                                    <input
+                                        placeholder="Geçici şifre"
+                                        value={newUser.password}
+                                        onChange={e => setNewUser({ ...newUser, password: e.target.value })}
+                                        style={inputStyle}
+                                    />
+                                </div>
+
+
+
+                            </div>
+
+                            <div style={{ textAlign: 'right', marginTop: '12px' }}>
+                                <button onClick={createUser} style={primaryButton}>
+                                    Kullanıcı Oluştur
+                                </button>
+                            </div>
                         </div>
 
-                        <button onClick={createUser} style={primaryButton}>Kullanıcı Oluştur</button>
-
                         <h4 style={{ marginTop: '25px' }}>Kullanıcı Listesi</h4>
+                        <div style={{ marginBottom: '12px' }}>
+                            <input
+                                type="text"
+                                placeholder="Kullanıcı adı, ad soyad, fakülte, bölüm veya TC Kimlik No ile ara..."
+                                value={userSearch}
+                                onChange={(e) => setUserSearch(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px',
+                                    border: '1px solid #ccc',
+                                    borderRadius: '6px',
+                                    fontSize: '14px'
+                                }}
+                            />
+                        </div>
                         <div style={{ marginBottom: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                             {[
                                 { value: 'all', label: 'Tümü' },
                                 { value: 'student', label: 'Öğrenciler' },
                                 { value: 'teacher', label: 'Bölüm Yetkilileri' },
                                 { value: 'commission', label: 'Öğrenci İşleri' },
-                                { value: 'admin', label: 'Adminler' }
+                                { value: 'admin', label: 'Sistem Yöneticileri' }
                             ].map(item => (
                                 <button
                                     key={item.value}
@@ -359,6 +615,8 @@ const AdminDashboard = () => {
                             <thead>
                                 <tr>
                                     <th style={thStyle}>ID</th>
+                                    <th style={thStyle}>T.C. Kimlik No</th>
+                                    <th style={thStyle}>Kullanıcı Adı</th>
                                     <th style={thStyle}>Ad Soyad</th>
                                     <th style={thStyle}>Rol</th>
                                     <th style={thStyle}>Fakülte</th>
@@ -374,16 +632,36 @@ const AdminDashboard = () => {
                                         <tr key={user.userid}>
                                             <td style={tdStyle}>{user.userid}</td>
                                             <td style={tdStyle}>
+                                                <input
+                                                    value={user.tckimlikno || ''}
+                                                    onChange={e => updateUserField(realIndex, 'tckimlikno', e.target.value)}
+                                                    style={inputStyle}
+                                                />
+                                            </td>
+                                            <td style={tdStyle}>
+                                                <input
+                                                    value={user.username || ''}
+                                                    onChange={e => updateUserField(realIndex, 'username', e.target.value)}
+                                                    style={inputStyle}
+                                                />
+                                            </td>
+                                            <td style={tdStyle}>
                                                 <input value={user.fullname || ''} onChange={e => updateUserField(realIndex, 'fullname', e.target.value)} style={inputStyle} />
                                             </td>
                                             <td style={tdStyle}>
-                                                <select value={user.role || ''} onChange={e => updateUserField(realIndex, 'role', e.target.value)} style={inputStyle}>
-                                                    <option value="student">student</option>
-                                                    <option value="teacher">teacher</option>
-                                                    <option value="commission">commission</option>
-                                                    <option value="admin">admin</option>
+                                                <select
+                                                    value={user.role || ''}
+                                                    onChange={e => updateUserField(realIndex, 'role', e.target.value)}
+                                                    style={inputStyle}
+                                                >
+                                                    {roleOptions.map(role => (
+                                                        <option key={role.value} value={role.value}>
+                                                            {role.label}
+                                                        </option>
+                                                    ))}
                                                 </select>
                                             </td>
+
                                             <td style={tdStyle}>
                                                 <input value={user.faculty || ''} onChange={e => updateUserField(realIndex, 'faculty', e.target.value)} style={inputStyle} />
                                             </td>
@@ -408,67 +686,249 @@ const AdminDashboard = () => {
                     <div style={sectionStyle}>
                         <h3>Müfredat / Ders Yönetimi</h3>
 
-                        <div style={formGrid}>
-                            <input placeholder="Ders Kodu" value={newCourse.courseCode} onChange={e => setNewCourse({ ...newCourse, courseCode: e.target.value })} style={inputStyle} />
-                            <input placeholder="Ders Adı" value={newCourse.courseName} onChange={e => setNewCourse({ ...newCourse, courseName: e.target.value })} style={inputStyle} />
-                            <input placeholder="Kredi" value={newCourse.localCredit} onChange={e => setNewCourse({ ...newCourse, localCredit: e.target.value })} style={inputStyle} />
-                            <input placeholder="AKTS" value={newCourse.akts} onChange={e => setNewCourse({ ...newCourse, akts: e.target.value })} style={inputStyle} />
-                            <input placeholder="Dönem" value={newCourse.semester} onChange={e => setNewCourse({ ...newCourse, semester: e.target.value })} style={inputStyle} />
-                            <input placeholder="Seçmeli Paket / Ders Tipi" value={newCourse.courseType} onChange={e => setNewCourse({ ...newCourse, courseType: e.target.value })} style={inputStyle} />
-                            <input placeholder="Ön Koşul Ders Kodu" value={newCourse.prerequisiteCode} onChange={e => setNewCourse({ ...newCourse, prerequisiteCode: e.target.value })} style={inputStyle} />
+                        <div style={userCreateBox}>
+                            <div style={formGridTwo}>
+
+                                <div>
+                                    <label style={formLabel}>Ders Kodu</label>
+                                    <input
+                                        placeholder="Ders Kodu"
+                                        value={newCourse.courseCode}
+                                        onChange={e => setNewCourse({ ...newCourse, courseCode: e.target.value })}
+                                        style={inputStyle}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={formLabel}>Ders Adı</label>
+                                    <input
+                                        placeholder="Ders Adı"
+                                        value={newCourse.courseName}
+                                        onChange={e => setNewCourse({ ...newCourse, courseName: e.target.value })}
+                                        style={inputStyle}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={formLabel}>Kredi</label>
+                                    <input
+                                        placeholder="Kredi"
+                                        value={newCourse.localCredit}
+                                        onChange={e => setNewCourse({ ...newCourse, localCredit: e.target.value })}
+                                        style={inputStyle}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={formLabel}>AKTS</label>
+                                    <input
+                                        placeholder="AKTS"
+                                        value={newCourse.akts}
+                                        onChange={e => setNewCourse({ ...newCourse, akts: e.target.value })}
+                                        style={inputStyle}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={formLabel}>Dönem</label>
+                                    <input
+                                        placeholder="Dönem"
+                                        value={newCourse.semester}
+                                        onChange={e => setNewCourse({ ...newCourse, semester: e.target.value })}
+                                        style={inputStyle}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={formLabel}>Seçmeli Paket / Ders Tipi</label>
+                                    <input
+                                        placeholder="Seçmeli Paket / Ders Tipi"
+                                        value={newCourse.courseType}
+                                        onChange={e => setNewCourse({ ...newCourse, courseType: e.target.value })}
+                                        style={inputStyle}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={formLabel}>Ön Koşul Ders Kodu</label>
+                                    <input
+                                        placeholder="Ön Koşul Ders Kodu"
+                                        value={newCourse.prerequisiteCode}
+                                        onChange={e => setNewCourse({ ...newCourse, prerequisiteCode: e.target.value })}
+                                        style={inputStyle}
+                                    />
+                                </div>
+
+                            </div>
+
+                            <div style={{ textAlign: 'right', marginTop: '12px' }}>
+                                <button onClick={createCourse} style={primaryButton}>
+                                    Ders Ekle
+                                </button>
+                            </div>
                         </div>
 
-                        <button onClick={createCourse} style={primaryButton}>Ders Ekle</button>
+                        <div style={{ marginTop: '15px', marginBottom: '10px' }}>
+                            <input
+                                type="text"
+                                placeholder="Ders kodu, ders adı, dönem, paket veya ön koşul ile ara..."
+                                value={courseSearch}
+                                onChange={(e) => setCourseSearch(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px',
+                                    border: '1px solid #ccc',
+                                    borderRadius: '6px',
+                                    fontSize: '14px',
+                                    boxSizing: 'border-box'
+                                }}
+                            />
+                        </div>
 
-                        <table style={tableStyle}>
-                            <thead>
-                                <tr>
-                                    <th style={thStyle}>Kod</th>
-                                    <th style={thStyle}>Ad</th>
-                                    <th style={thStyle}>Kredi</th>
-                                    <th style={thStyle}>AKTS</th>
-                                    <th style={thStyle}>Dönem</th>
-                                    <th style={thStyle}>Paket</th>
-                                    <th style={thStyle}>Ön Koşul</th>
-                                    <th style={thStyle}>İşlem</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {curriculum.map((course, index) => (
-                                    <tr key={course.courseid}>
-                                        <td style={tdStyle}><input value={course.coursecode || ''} onChange={e => updateCourseField(index, 'coursecode', e.target.value)} style={inputStyle} /></td>
-                                        <td style={tdStyle}><input value={course.coursename || ''} onChange={e => updateCourseField(index, 'coursename', e.target.value)} style={inputStyle} /></td>
-                                        <td style={tdStyle}><input value={course.localcredit || ''} onChange={e => updateCourseField(index, 'localcredit', e.target.value)} style={inputStyle} /></td>
-                                        <td style={tdStyle}><input value={course.akts || ''} onChange={e => updateCourseField(index, 'akts', e.target.value)} style={inputStyle} /></td>
-                                        <td style={tdStyle}><input value={course.semester || ''} onChange={e => updateCourseField(index, 'semester', e.target.value)} style={inputStyle} /></td>
-                                        <td style={tdStyle}><input value={course.coursetype || ''} onChange={e => updateCourseField(index, 'coursetype', e.target.value)} style={inputStyle} /></td>
-                                        <td style={tdStyle}><input value={course.prerequisitecode || ''} onChange={e => updateCourseField(index, 'prerequisitecode', e.target.value)} style={inputStyle} /></td>
-                                        <td style={tdStyle}>
-                                            <button onClick={() => updateCourse(course)} style={smallButton}>Kaydet</button>
-                                            <button onClick={() => deleteCourse(course.courseid)} style={dangerButton}>Sil</button>
-                                        </td>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={tableStyle}>
+                                <thead>
+                                    <tr>
+                                        <th style={thStyle}>Kod</th>
+                                        <th style={{ ...thStyle, minWidth: '300px' }}>
+                                            Ad
+                                        </th>
+                                        <th style={thStyle}>Kredi</th>
+                                        <th style={thStyle}>AKTS</th>
+                                        <th style={thStyle}>Dönem</th>
+                                        <th style={thStyle}>Paket</th>
+                                        <th style={thStyle}>Ön Koşul</th>
+                                        <th style={thStyle}>İşlem</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {filteredCourses.map((course) => {
+                                        const realIndex = curriculum.findIndex(c => c.courseid === course.courseid);
+
+                                        return (
+                                            <tr key={course.courseid}>
+                                                <td style={tdStyle}><input value={course.coursecode || ''} onChange={e => updateCourseField(realIndex, 'coursecode', e.target.value)} style={inputStyle} /></td>
+                                                <td style={{ ...tdStyle, minWidth: '300px' }}>
+                                                    <input
+                                                        title={course.coursename || ''}
+                                                        value={course.coursename || ''}
+                                                        onChange={e => updateCourseField(realIndex, 'coursename', e.target.value)}
+                                                        style={{
+                                                            ...inputStyle,
+                                                            width: '100%'
+                                                        }}
+                                                    />
+                                                </td>
+                                                <td style={tdStyle}><input value={course.localcredit || ''} onChange={e => updateCourseField(realIndex, 'localcredit', e.target.value)} style={inputStyle} /></td>
+                                                <td style={tdStyle}><input value={course.akts || ''} onChange={e => updateCourseField(realIndex, 'akts', e.target.value)} style={inputStyle} /></td>
+                                                <td style={tdStyle}><input value={course.semester || ''} onChange={e => updateCourseField(realIndex, 'semester', e.target.value)} style={inputStyle} /></td>
+                                                <td style={tdStyle}><input value={course.coursetype || ''} onChange={e => updateCourseField(realIndex, 'coursetype', e.target.value)} style={inputStyle} /></td>
+                                                <td style={tdStyle}><input value={course.prerequisitecode || ''} onChange={e => updateCourseField(realIndex, 'prerequisitecode', e.target.value)} style={inputStyle} /></td>
+                                                <td style={tdStyle}>
+                                                    <button onClick={() => updateCourse(course)} style={smallButton}>Kaydet</button>
+                                                    <button onClick={() => deleteCourse(course.courseid)} style={dangerButton}>Sil</button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+
+                                </tbody>
+
+                            </table>
+                        </div>
                     </div>
+
                 )}
+
+
 
                 {activeTab === 'settings' && (
                     <div style={sectionStyle}>
                         <h3>Komisyon / İmza Bilgileri</h3>
 
-                        <div style={formGrid}>
-                            <input placeholder="Fakülte" value={newSetting.faculty} onChange={e => setNewSetting({ ...newSetting, faculty: e.target.value })} style={inputStyle} />
-                            <input placeholder="Bölüm" value={newSetting.department} onChange={e => setNewSetting({ ...newSetting, department: e.target.value })} style={inputStyle} />
-                            <input placeholder="1. Üye" value={newSetting.commissionMember1} onChange={e => setNewSetting({ ...newSetting, commissionMember1: e.target.value })} style={inputStyle} />
-                            <input placeholder="2. Üye" value={newSetting.commissionMember2} onChange={e => setNewSetting({ ...newSetting, commissionMember2: e.target.value })} style={inputStyle} />
-                            <input placeholder="3. Üye" value={newSetting.commissionMember3} onChange={e => setNewSetting({ ...newSetting, commissionMember3: e.target.value })} style={inputStyle} />
-                            <input placeholder="Komisyon Başkanı" value={newSetting.commissionPresident} onChange={e => setNewSetting({ ...newSetting, commissionPresident: e.target.value })} style={inputStyle} />
-                            <input placeholder="Bölüm Başkanı" value={newSetting.departmentHead} onChange={e => setNewSetting({ ...newSetting, departmentHead: e.target.value })} style={inputStyle} />
-                        </div>
+                        <div style={userCreateBox}>
+                            <div style={formGridTwo}>
 
-                        <button onClick={saveSettings} style={primaryButton}>İmza Bilgilerini Kaydet</button>
+                                <div>
+                                    <label style={formLabel}>Fakülte</label>
+                                    <input
+                                        placeholder="Fakülte"
+                                        value={newSetting.faculty}
+                                        onChange={e => setNewSetting({ ...newSetting, faculty: e.target.value })}
+                                        style={inputStyle}
+                                    />
+                                </div>
+
+
+
+
+                                <div>
+                                    <label style={formLabel}>Bölüm Başkanı</label>
+                                    <input
+                                        placeholder="Bölüm Başkanı"
+                                        value={newSetting.departmentHead}
+                                        onChange={e => setNewSetting({ ...newSetting, departmentHead: e.target.value })}
+                                        style={inputStyle}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={formLabel}>Bölüm</label>
+                                    <input
+                                        placeholder="Bölüm"
+                                        value={newSetting.department}
+                                        onChange={e => setNewSetting({ ...newSetting, department: e.target.value })}
+                                        style={inputStyle}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={formLabel}>1. Üye</label>
+                                    <input
+                                        placeholder="1. Üye"
+                                        value={newSetting.commissionMember1}
+                                        onChange={e => setNewSetting({ ...newSetting, commissionMember1: e.target.value })}
+                                        style={inputStyle}
+                                    />
+                                </div>
+
+
+                                <div>
+                                    <label style={formLabel}>Komisyon Başkanı</label>
+                                    <input
+                                        placeholder="Komisyon Başkanı"
+                                        value={newSetting.commissionPresident}
+                                        onChange={e => setNewSetting({ ...newSetting, commissionPresident: e.target.value })}
+                                        style={inputStyle}
+                                    />
+                                </div>
+
+
+
+                                <div>
+                                    <label style={formLabel}>2. Üye</label>
+                                    <input
+                                        placeholder="2. Üye"
+                                        value={newSetting.commissionMember2}
+                                        onChange={e => setNewSetting({ ...newSetting, commissionMember2: e.target.value })}
+                                        style={inputStyle}
+                                    />
+                                </div>
+
+
+
+
+
+
+
+                            </div>
+
+                            <div style={{ textAlign: 'right', marginTop: '12px' }}>
+                                <button onClick={saveSettings} style={primaryButton}>
+                                    İmza Bilgilerini Kaydet
+                                </button>
+                            </div>
+                        </div>
 
                         <table style={tableStyle}>
                             <thead>
@@ -477,21 +937,37 @@ const AdminDashboard = () => {
                                     <th style={thStyle}>Bölüm</th>
                                     <th style={thStyle}>1. Üye</th>
                                     <th style={thStyle}>2. Üye</th>
-                                    <th style={thStyle}>3. Üye</th>
                                     <th style={thStyle}>Başkan</th>
                                     <th style={thStyle}>Bölüm Başkanı</th>
+                                    <th style={thStyle}>İşlem</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {departmentSettings.map(item => (
+                                {departmentSettings.map((item, index) => (
                                     <tr key={item.settingid}>
-                                        <td style={tdStyle}>{item.faculty}</td>
-                                        <td style={tdStyle}>{item.department}</td>
-                                        <td style={tdStyle}>{item.commissionmember1}</td>
-                                        <td style={tdStyle}>{item.commissionmember2}</td>
-                                        <td style={tdStyle}>{item.commissionmember3}</td>
-                                        <td style={tdStyle}>{item.commissionpresident}</td>
-                                        <td style={tdStyle}>{item.departmenthead}</td>
+                                        <td style={tdStyle}>
+                                            <input value={item.faculty || ''} onChange={e => updateSettingField(index, 'faculty', e.target.value)} style={inputStyle} />
+                                        </td>
+                                        <td style={tdStyle}>
+                                            <input value={item.department || ''} onChange={e => updateSettingField(index, 'department', e.target.value)} style={inputStyle} />
+                                        </td>
+                                        <td style={tdStyle}>
+                                            <input value={item.commissionmember1 || ''} onChange={e => updateSettingField(index, 'commissionmember1', e.target.value)} style={inputStyle} />
+                                        </td>
+                                        <td style={tdStyle}>
+                                            <input value={item.commissionmember2 || ''} onChange={e => updateSettingField(index, 'commissionmember2', e.target.value)} style={inputStyle} />
+                                        </td>
+                                       
+                                        <td style={tdStyle}>
+                                            <input value={item.commissionpresident || ''} onChange={e => updateSettingField(index, 'commissionpresident', e.target.value)} style={inputStyle} />
+                                        </td>
+                                        <td style={tdStyle}>
+                                            <input value={item.departmenthead || ''} onChange={e => updateSettingField(index, 'departmenthead', e.target.value)} style={inputStyle} />
+                                        </td>
+                                        <td style={tdStyle}>
+                                            <button onClick={() => updateSetting(item)} style={smallButton}>Kaydet</button>
+                                            <button onClick={() => deleteSetting(item.settingid)} style={dangerButton}>Sil</button>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -643,6 +1119,26 @@ const tabStyle = active => ({
     color: active ? 'white' : 'black',
     fontWeight: active ? 'bold' : 'normal'
 });
+const userCreateBox = {
+    background: '#f8f9fa',
+    border: '1px solid #ddd',
+    borderRadius: '8px',
+    padding: '15px',
+    marginBottom: '18px'
+};
+
+const formGridTwo = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: '12px'
+};
+
+const formLabel = {
+    display: 'block',
+    fontWeight: 'bold',
+    marginBottom: '5px',
+    fontSize: '13px'
+};
 const cardGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' };
 const cardStyle = { background: '#f8f9fa', border: '1px solid #ddd', borderRadius: '8px', padding: '15px' };
 const formGrid = { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '12px' };
@@ -653,5 +1149,16 @@ const tdStyle = { border: '1px solid #ddd', padding: '7px' };
 const primaryButton = { padding: '8px 12px', background: '#004a99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' };
 const smallButton = { padding: '5px 8px', background: '#004a99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '4px', marginBottom: '4px' };
 const dangerButton = { ...smallButton, background: '#dc3545' };
+const headerBannerStyle = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    padding: '15px 25px',
+    border: '1px solid #ddd',
+    borderRadius: '8px',
+    marginBottom: '20px',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+};
 
 export default AdminDashboard;
