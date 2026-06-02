@@ -105,6 +105,14 @@ const TeacherDashboard = () => {
         window.location.href = '/login';
     };
 
+    const getUploadedFileUrl = (filePath) => {
+        const cleanPath = String(filePath || '')
+            .replaceAll('\\', '/')
+            .replace(/^.*uploads\//, 'uploads/');
+
+        return `http://localhost:5000/${cleanPath}`;
+    };
+
     const getCleanCourseName = (courseName) => {
         return String(courseName || '').replace(/\s*\([^)]+\)\s*/g, '').trim();
     };
@@ -581,7 +589,7 @@ const TeacherDashboard = () => {
                                                     type="button"
                                                     onClick={() => {
                                                         const fileUrl = `http://localhost:5000/${file.filepath.replaceAll('\\', '/')}`;
-                                                        window.open(fileUrl, '_blank');
+                                                        window.open(getUploadedFileUrl(file.filepath), '_blank');
                                                     }}
                                                     style={primaryButton}
                                                 >
@@ -673,9 +681,19 @@ const TeacherDashboard = () => {
                                     <tbody>
                                         {structuredGroups.map((group, groupIndex) => {
                                             const totalRowsInGroup = group.decisions.length;
+                                            const sourceRowHeight = 58;
+
 
                                             return group.decisions.map((mapping, rowIndex) => (
-                                                <tr key={`${groupIndex}-${rowIndex}`}>
+                                                <tr
+                                                    key={`${groupIndex}-${rowIndex}`}
+                                                    style={{
+                                                        borderTop:
+                                                            groupIndex > 0 && rowIndex === 0
+                                                                ? '3px solid #666'
+                                                                : undefined
+                                                    }}
+                                                >
 
                                                     {/* SIRA NUMARASI */}
                                                     {rowIndex === 0 && (
@@ -687,62 +705,220 @@ const TeacherDashboard = () => {
                                                     {/* 🛠️ SOL TARAF: FAKÜLTE YETKİLİSİNİN DERS EKLEYİP SİLEBİLECEĞİ DİNAMİK KAYNAK DERS ALANI */}
                                                     {rowIndex === 0 && (
                                                         <>
-                                                            <td rowSpan={totalRowsInGroup} style={{ ...tdStyle, verticalAlign: 'middle' }}>
+                                                            {/* Kaynak Ders */}
+                                                            <td
+                                                                rowSpan={totalRowsInGroup}
+                                                                style={{
+                                                                    ...tdStyle,
+                                                                    padding: 0,
+                                                                    verticalAlign: 'middle',
+                                                                    borderTop:
+                                                                        groupIndex > 0
+                                                                            ? '3px solid #666'
+                                                                            : undefined
+                                                                }}
+                                                            >
                                                                 {group.externalCourses.map((course, i) => (
-                                                                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', padding: '4px', borderBottom: '1px dashed #eee' }}>
-                                                                        <span><b>{course.code || course.externalcoursecode}</b> - {course.name || course.externalcoursename}</span>
+                                                                    <div
+                                                                        key={i}
+                                                                        style={{
+                                                                            height: `${sourceRowHeight}px`,
+                                                                            boxSizing: 'border-box',
+                                                                            padding: '8px',
+                                                                            display: 'grid',
+                                                                            gridTemplateColumns: '1fr 26px',
+                                                                            gap: '6px',
+                                                                            alignItems: 'center',
+                                                                            borderBottom:
+                                                                                i !== group.externalCourses.length - 1
+                                                                                    ? '1px solid #ddd'
+                                                                                    : 'none'
+                                                                        }}
+                                                                    >
+                                                                        <span>
+                                                                            <b>{course.code || course.externalcoursecode}</b>
+                                                                            {' - '}
+                                                                            {course.name || course.externalcoursename}
+                                                                        </span>
+
                                                                         <button
                                                                             type="button"
-                                                                            onClick={() => deleteExternalCourseFromGroup(course.extCourseId || course.extcourseid)}
-                                                                            style={{ background: '#dc3545', color: 'white', border: 'none', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}
+                                                                            onClick={() =>
+                                                                                deleteExternalCourseFromGroup(
+                                                                                    course.extCourseId || course.extcourseid
+                                                                                )
+                                                                            }
+                                                                            title="Kaynak dersi sil"
+                                                                            style={{
+                                                                                width: '24px',
+                                                                                height: '24px',
+                                                                                border: 'none',
+                                                                                background: 'transparent',
+                                                                                color: '#dc3545',
+                                                                                cursor: 'pointer',
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                justifyContent: 'center',
+                                                                                padding: 0
+                                                                            }}
                                                                         >
-                                                                            Sil
+                                                                            <Trash2 size={15} />
                                                                         </button>
                                                                     </div>
                                                                 ))}
 
-                                                                {/* Hoca satır içi kaynak ders eklemek isterse */}
                                                                 {activeAddExternalRow === groupIndex ? (
                                                                     <div style={{ background: '#f8f9fa', padding: '6px', borderRadius: '4px', marginTop: '8px', border: '1px solid #ddd' }}>
-                                                                        <input id={`ext-code-${groupIndex}`} placeholder="Kod (MAT101)" style={{ width: '100%', marginBottom: '4px', padding: '4px' }} />
+                                                                        <input id={`ext-code-${groupIndex}`} placeholder="Kod" style={{ width: '100%', marginBottom: '4px', padding: '4px' }} />
                                                                         <input id={`ext-name-${groupIndex}`} placeholder="Ders Adı" style={{ width: '100%', marginBottom: '4px', padding: '4px' }} />
                                                                         <input id={`ext-credit-${groupIndex}`} type="number" placeholder="Kredi" style={{ width: '100%', marginBottom: '4px', padding: '4px' }} />
                                                                         <input id={`ext-akts-${groupIndex}`} type="number" placeholder="AKTS" style={{ width: '100%', marginBottom: '4px', padding: '4px' }} />
-                                                                        <input id={`ext-grade-${groupIndex}`} placeholder="Harf Notu (AA)" style={{ width: '100%', marginBottom: '6px', padding: '4px' }} />
+                                                                        <input id={`ext-grade-${groupIndex}`} placeholder="Harf Notu" style={{ width: '100%', marginBottom: '6px', padding: '4px' }} />
+
                                                                         <div style={{ display: 'flex', gap: '4px' }}>
-                                                                            <button type="button" style={{ ...primaryButton, backgroundColor: '#198754', padding: '2px 6px', fontSize: '11px' }} onClick={() => {
-                                                                                const code = document.getElementById(`ext-code-${groupIndex}`).value;
-                                                                                const name = document.getElementById(`ext-name-${groupIndex}`).value;
-                                                                                const sourceCredit = document.getElementById(`ext-credit-${groupIndex}`).value;
-                                                                                const akts = document.getElementById(`ext-akts-${groupIndex}`).value;
-                                                                                const grade = document.getElementById(`ext-grade-${groupIndex}`).value;
-                                                                                addExternalCourseToGroup(app.applicationid, mapping.targetCourse?.courseid, { code, name, sourceCredit, akts, grade });
-                                                                            }}>Ekle</button>
-                                                                            <button type="button" style={{ ...secondaryButton, marginBottom: 0, padding: '2px 6px', fontSize: '11px' }} onClick={() => setActiveAddExternalRow(null)}>İptal</button>
+                                                                            <button
+                                                                                type="button"
+                                                                                style={{ ...primaryButton, backgroundColor: '#198754', padding: '2px 6px', fontSize: '11px' }}
+                                                                                onClick={() => {
+                                                                                    const code = document.getElementById(`ext-code-${groupIndex}`).value;
+                                                                                    const name = document.getElementById(`ext-name-${groupIndex}`).value;
+                                                                                    const sourceCredit = document.getElementById(`ext-credit-${groupIndex}`).value;
+                                                                                    const akts = document.getElementById(`ext-akts-${groupIndex}`).value;
+                                                                                    const grade = document.getElementById(`ext-grade-${groupIndex}`).value;
+
+                                                                                    addExternalCourseToGroup(app.applicationid, mapping.targetCourse?.courseid, {
+                                                                                        code,
+                                                                                        name,
+                                                                                        sourceCredit,
+                                                                                        akts,
+                                                                                        grade
+                                                                                    });
+                                                                                }}
+                                                                            >
+                                                                                Ekle
+                                                                            </button>
+
+                                                                            <button
+                                                                                type="button"
+                                                                                style={{ ...secondaryButton, marginBottom: 0, padding: '2px 6px', fontSize: '11px' }}
+                                                                                onClick={() => setActiveAddExternalRow(null)}
+                                                                            >
+                                                                                İptal
+                                                                            </button>
                                                                         </div>
                                                                     </div>
                                                                 ) : (
-                                                                    <button type="button" style={{ ...primaryButton, backgroundColor: '#6c757d', width: '100%', marginTop: '5px', fontSize: '11px', padding: '3px' }} onClick={() => setActiveAddExternalRow(groupIndex)}>
+                                                                    <button
+                                                                        type="button"
+                                                                        style={{ ...primaryButton, backgroundColor: '#6c757d', width: '100%', marginTop: '6px', fontSize: '11px', padding: '3px' }}
+                                                                        onClick={() => setActiveAddExternalRow(groupIndex)}
+                                                                    >
                                                                         + Farklı Kaynak Ders Ekle
                                                                     </button>
                                                                 )}
                                                             </td>
-                                                            <td rowSpan={totalRowsInGroup} style={{ ...tdStyle, textAlign: 'center', verticalAlign: 'middle' }}>
+
+                                                            {/* Kaynak Kredi */}
+                                                            <td
+                                                                rowSpan={totalRowsInGroup}
+                                                                style={{
+                                                                    ...tdStyle,
+                                                                    padding: 0,
+                                                                    verticalAlign: 'middle',
+                                                                    borderTop:
+                                                                        groupIndex > 0
+                                                                            ? '3px solid #666'
+                                                                            : undefined
+                                                                }}
+                                                            >
                                                                 {group.externalCourses.map((course, i) => (
-                                                                    <div key={i} style={{ height: '24px' }}>{course.sourceCredit || course.externalcredit || '-'}</div>
-                                                                ))}
-                                                            </td>
-                                                            <td rowSpan={totalRowsInGroup} style={{ ...tdStyle, textAlign: 'center', verticalAlign: 'middle' }}>
-                                                                {group.externalCourses.map((course, i) => (
-                                                                    <div key={i} style={{ height: '24px' }}>{course.akts || course.externalakts || '-'}</div>
-                                                                ))}
-                                                            </td>
-                                                            <td rowSpan={totalRowsInGroup} style={{ ...tdStyle, textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold' }}>
-                                                                {group.externalCourses.map((course, i) => (
-                                                                    <div key={i} style={{ height: '24px' }}>{course.grade || course.externalgrade || '-'}</div>
+                                                                    <div
+                                                                        key={i}
+                                                                        style={{
+                                                                            height: `${sourceRowHeight}px`,
+                                                                            boxSizing: 'border-box',
+                                                                            padding: '8px',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                            borderBottom:
+                                                                                i !== group.externalCourses.length - 1
+                                                                                    ? '1px solid #ddd'
+                                                                                    : 'none'
+                                                                        }}
+                                                                    >
+                                                                        {course.sourceCredit || course.externalcredit || '-'}
+                                                                    </div>
                                                                 ))}
                                                             </td>
 
+                                                            {/* Kaynak AKTS */}
+                                                            <td
+                                                                rowSpan={totalRowsInGroup}
+                                                                style={{
+                                                                    ...tdStyle,
+                                                                    padding: 0,
+                                                                    verticalAlign: 'middle',
+                                                                    borderTop:
+                                                                        groupIndex > 0
+                                                                            ? '3px solid #666'
+                                                                            : undefined
+                                                                }}
+                                                            >
+                                                                {group.externalCourses.map((course, i) => (
+                                                                    <div
+                                                                        key={i}
+                                                                        style={{
+                                                                            height: `${sourceRowHeight}px`,
+                                                                            boxSizing: 'border-box',
+                                                                            padding: '8px',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                            borderBottom:
+                                                                                i !== group.externalCourses.length - 1
+                                                                                    ? '1px solid #ddd'
+                                                                                    : 'none'
+                                                                        }}
+                                                                    >
+                                                                        {course.akts || course.externalakts || '-'}
+                                                                    </div>
+                                                                ))}
+                                                            </td>
+
+                                                            {/* Harf Notu */}
+                                                            <td
+                                                                rowSpan={totalRowsInGroup}
+                                                                style={{
+                                                                    ...tdStyle,
+                                                                    padding: 0,
+                                                                    verticalAlign: 'middle',
+                                                                    borderTop:
+                                                                        groupIndex > 0
+                                                                            ? '3px solid #666'
+                                                                            : undefined
+                                                                }}
+                                                            >
+                                                                {group.externalCourses.map((course, i) => (
+                                                                    <div
+                                                                        key={i}
+                                                                        style={{
+                                                                            height: `${sourceRowHeight}px`,
+                                                                            boxSizing: 'border-box',
+                                                                            padding: '8px',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                            borderBottom:
+                                                                                i !== group.externalCourses.length - 1
+                                                                                    ? '1px solid #ddd'
+                                                                                    : 'none'
+                                                                        }}
+                                                                    >
+                                                                        {course.grade || course.externalgrade || '-'}
+                                                                    </div>
+                                                                ))}
+                                                            </td>
                                                         </>
                                                     )}
 
@@ -783,15 +959,15 @@ const TeacherDashboard = () => {
                                                                             height: '34px',
                                                                             border: 'none',
                                                                             borderRadius: '5px',
-                                                                            background: '#dc3545',
-                                                                            color: 'white',
+                                                                            background: 'transparent',
+                                                                            color: '#dc3545',
                                                                             cursor: 'pointer',
                                                                             display: 'flex',
                                                                             alignItems: 'center',
                                                                             justifyContent: 'center'
                                                                         }}
                                                                     >
-                                                                        <Trash2 size={15} />
+                                                                        <Trash2 size={16} />
                                                                     </button>
                                                                 </div>
                                                             </>
@@ -898,10 +1074,13 @@ const TeacherDashboard = () => {
                                                                 type="button"
                                                                 onClick={() => deleteMappingGroup(group)}
                                                                 style={{
-                                                                    ...primaryButton,
-                                                                    backgroundColor: '#dc3545',
-                                                                    fontSize: '12px',
-                                                                    padding: '6px 10px'
+                                                                    background: 'transparent',
+                                                                    color: '#dc3545',
+                                                                    border: '1px solid #dc3545',
+                                                                    borderRadius: '4px',
+                                                                    padding: '5px 8px',
+                                                                    fontSize: '11px',
+                                                                    cursor: 'pointer'
                                                                 }}
                                                             >
                                                                 Eşleşmeyi Sil

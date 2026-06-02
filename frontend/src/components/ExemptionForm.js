@@ -34,6 +34,7 @@ const ExemptionForm = () => {
     const [curriculumFile, setCurriculumFile] = useState(null);
     const [internshipFile, setInternshipFile] = useState(null);
     const [currentUser, setCurrentUser] = useState(null);
+    const DRAFT_KEY = 'exemptionApplicationDraft';
 
     useEffect(() => {
         api.get('/auth/me')
@@ -113,7 +114,27 @@ const ExemptionForm = () => {
             .catch(err => {
                 console.error("Son başvuru alınamadı:", err.response?.data || err.message);
             });
+        try {
+            const savedDraft = localStorage.getItem(DRAFT_KEY);
+
+            if (savedDraft) {
+                const draft = JSON.parse(savedDraft);
+
+                setAcademicYear(draft.academicYear || '');
+                setSemester(draft.semester || '');
+                setExemptionReason(draft.exemptionReason || '');
+                setSourceUniversity(draft.sourceUniversity || '');
+                setSourceFaculty(draft.sourceFaculty || '');
+                setSourceDepartment(draft.sourceDepartment || '');
+                setIntakeNote(draft.intakeNote || '');
+                setSavedMappings(Array.isArray(draft.savedMappings) ? draft.savedMappings : []);
+            }
+        } catch (err) {
+            console.error('Taslak okunamadı:', err);
+            localStorage.removeItem(DRAFT_KEY);
+        }
     }, []);
+
 
     const selectedOMUCourses = curriculum.filter(
         c => targetCourseIds.map(String).includes(String(c.courseid))
@@ -171,6 +192,14 @@ const ExemptionForm = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('role');
         window.location.href = '/login';
+    };
+
+    const getUploadedFileUrl = (filePath) => {
+        const cleanPath = String(filePath || '')
+            .replaceAll('\\', '/')
+            .replace(/^.*uploads\//, 'uploads/');
+
+        return `http://localhost:5000/${cleanPath}`;
     };
 
     const getOverallApplicationStatus = (mappings = [], applicationStatus = '') => {
@@ -277,6 +306,40 @@ const ExemptionForm = () => {
         }
 
         setExternalCourses(externalCourses.filter((_, i) => i !== index));
+    };
+
+    const saveDraft = () => {
+        const draft = {
+            academicYear,
+            semester,
+            exemptionReason,
+            sourceUniversity,
+            sourceFaculty,
+            sourceDepartment,
+            intakeNote,
+            savedMappings
+        };
+
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+        alert('Başvuru taslağı kaydedildi.');
+    };
+
+    const deleteDraft = () => {
+        if (!window.confirm('Taslağı silmek istediğine emin misin?')) return;
+
+        localStorage.removeItem(DRAFT_KEY);
+
+        setAcademicYear('');
+        setSemester('');
+        setExemptionReason('');
+        setSourceUniversity('');
+        setSourceFaculty('');
+        setSourceDepartment('');
+        setIntakeNote('');
+        setSavedMappings([]);
+        setWarnings([]);
+
+        alert('Taslak silindi.');
     };
 
     const createApplication = async () => {
@@ -534,6 +597,7 @@ const ExemptionForm = () => {
             });
 
             setApplicationId(newApplicationId);
+            localStorage.removeItem(DRAFT_KEY);
 
             setSubmittedApplication({
                 applicationId: newApplicationId,
@@ -858,169 +922,181 @@ const ExemptionForm = () => {
                             </thead>
                             <tbody>
                                 {getGroupedSubmittedMappings(submittedApplication.mappings).map((group, index) => (
-                                    <tr
-                                        key={index}
-                                        style={{
-                                            borderTop: index === 0 ? 'none' : '2px solid #666'
-                                        }}
-                                    >
-                                        <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
-                                            {index + 1}
-                                        </td>
+                                    <React.Fragment key={index}>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '0' }}>
-                                            {group.externalCourses.map((course, i) => (
-                                                <div
-                                                    key={i}
+                                        {index > 0 && (
+                                            <tr>
+                                                <td
+                                                    colSpan="9"
                                                     style={{
-                                                        padding: '8px',
-                                                        borderBottom:
-                                                            i !== group.externalCourses.length - 1
-                                                                ? '1px solid #ddd'
-                                                                : 'none'
+                                                        padding: 0,
+                                                        height: '0px',
+                                                        borderTop: '3px solid #666',
+                                                        background: '#666'
                                                     }}
-                                                >
-                                                    {course.code} - {course.name}
-                                                </div>
-                                            ))}
-                                        </td>
+                                                />
+                                            </tr>
+                                        )}
 
-                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
-                                            {group.externalCourses.map((course, i) => (
-                                                <div
-                                                    key={i}
-                                                    style={{
-                                                        padding: '8px',
-                                                        borderBottom:
-                                                            i !== group.externalCourses.length - 1
-                                                                ? '1px solid #ddd'
-                                                                : 'none'
-                                                    }}
-                                                >
-                                                    {course.sourceCredit || '-'}
-                                                </div>
-                                            ))}
-                                        </td>
+                                        <tr>
+                                            <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
+                                                {index + 1}
+                                            </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
-                                            {group.externalCourses.map((course, i) => (
-                                                <div
-                                                    key={i}
-                                                    style={{
-                                                        padding: '8px',
-                                                        borderBottom:
-                                                            i !== group.externalCourses.length - 1
-                                                                ? '1px solid #ddd'
-                                                                : 'none'
-                                                    }}
-                                                >
-                                                    {course.akts || '-'}
-                                                </div>
-                                            ))}
-                                        </td>
+                                            <td style={{ border: '1px solid #ddd', padding: '0' }}>
+                                                {group.externalCourses.map((course, i) => (
+                                                    <div
+                                                        key={i}
+                                                        style={{
+                                                            padding: '8px',
+                                                            borderBottom:
+                                                                i !== group.externalCourses.length - 1
+                                                                    ? '1px solid #ddd'
+                                                                    : 'none'
+                                                        }}
+                                                    >
+                                                        {course.code} - {course.name}
+                                                    </div>
+                                                ))}
+                                            </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center', fontWeight: 'bold' }}>
-                                            {group.externalCourses.map((course, i) => (
-                                                <div
-                                                    key={i}
-                                                    style={{
-                                                        padding: '8px',
-                                                        borderBottom:
-                                                            i !== group.externalCourses.length - 1
-                                                                ? '1px solid #ddd'
-                                                                : 'none'
-                                                    }}
-                                                >
-                                                    {course.grade || '-'}
-                                                </div>
-                                            ))}
-                                        </td>
+                                            <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                                {group.externalCourses.map((course, i) => (
+                                                    <div
+                                                        key={i}
+                                                        style={{
+                                                            padding: '8px',
+                                                            borderBottom:
+                                                                i !== group.externalCourses.length - 1
+                                                                    ? '1px solid #ddd'
+                                                                    : 'none'
+                                                        }}
+                                                    >
+                                                        {course.sourceCredit || '-'}
+                                                    </div>
+                                                ))}
+                                            </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '0' }}>
-                                            {group.targetMappings.map((mapping, i) => (
-                                                <div
-                                                    key={i}
-                                                    style={{
-                                                        padding: '8px',
-                                                        minHeight: '48px',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        borderBottom:
-                                                            i !== group.targetMappings.length - 1
-                                                                ? '1px solid #ddd'
-                                                                : 'none'
-                                                    }}
-                                                >
-                                                    {mapping.targetCourse?.coursecode}
-                                                    {' - '}
-                                                    {getCleanCourseName(mapping.targetCourse?.coursename)}
-                                                </div>
-                                            ))}
-                                        </td>
+                                            <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                                {group.externalCourses.map((course, i) => (
+                                                    <div
+                                                        key={i}
+                                                        style={{
+                                                            padding: '8px',
+                                                            borderBottom:
+                                                                i !== group.externalCourses.length - 1
+                                                                    ? '1px solid #ddd'
+                                                                    : 'none'
+                                                        }}
+                                                    >
+                                                        {course.akts || '-'}
+                                                    </div>
+                                                ))}
+                                            </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
-                                            {group.targetMappings.map((mapping, i) => (
-                                                <div
-                                                    key={i}
-                                                    style={{
-                                                        padding: '8px',
-                                                        minHeight: '48px',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        borderBottom:
-                                                            i !== group.targetMappings.length - 1
-                                                                ? '1px solid #ddd'
-                                                                : 'none'
-                                                    }}
-                                                >
-                                                    {mapping.targetCourse?.localcredit || '-'}
-                                                </div>
-                                            ))}
-                                        </td>
+                                            <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center', fontWeight: 'bold' }}>
+                                                {group.externalCourses.map((course, i) => (
+                                                    <div
+                                                        key={i}
+                                                        style={{
+                                                            padding: '8px',
+                                                            borderBottom:
+                                                                i !== group.externalCourses.length - 1
+                                                                    ? '1px solid #ddd'
+                                                                    : 'none'
+                                                        }}
+                                                    >
+                                                        {course.grade || '-'}
+                                                    </div>
+                                                ))}
+                                            </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
-                                            {group.targetMappings.map((mapping, i) => (
-                                                <div
-                                                    key={i}
-                                                    style={{
-                                                        padding: '8px',
-                                                        minHeight: '48px',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        borderBottom:
-                                                            i !== group.targetMappings.length - 1
-                                                                ? '1px solid #ddd'
-                                                                : 'none'
-                                                    }}
-                                                >
-                                                    {mapping.targetCourse?.akts || '-'}
-                                                </div>
-                                            ))}
-                                        </td>
+                                            <td style={{ border: '1px solid #ddd', padding: '0' }}>
+                                                {group.targetMappings.map((mapping, i) => (
+                                                    <div
+                                                        key={i}
+                                                        style={{
+                                                            padding: '8px',
+                                                            minHeight: '48px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            borderBottom:
+                                                                i !== group.targetMappings.length - 1
+                                                                    ? '1px solid #ddd'
+                                                                    : 'none'
+                                                        }}
+                                                    >
+                                                        {mapping.targetCourse?.coursecode}
+                                                        {' - '}
+                                                        {getCleanCourseName(mapping.targetCourse?.coursename)}
+                                                    </div>
+                                                ))}
+                                            </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
-                                            {group.targetMappings.map((mapping, i) => (
-                                                <div
-                                                    key={i}
-                                                    style={{
-                                                        padding: '8px',
-                                                        minHeight: '48px',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        borderBottom:
-                                                            i !== group.targetMappings.length - 1
-                                                                ? '1px solid #ddd'
-                                                                : 'none'
-                                                    }}
-                                                >
-                                                    {mapping.finalGrade || '-'}
-                                                </div>
-                                            ))}
-                                        </td>
-                                    </tr>
+                                            <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                                {group.targetMappings.map((mapping, i) => (
+                                                    <div
+                                                        key={i}
+                                                        style={{
+                                                            padding: '8px',
+                                                            minHeight: '48px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            borderBottom:
+                                                                i !== group.targetMappings.length - 1
+                                                                    ? '1px solid #ddd'
+                                                                    : 'none'
+                                                        }}
+                                                    >
+                                                        {mapping.targetCourse?.localcredit || '-'}
+                                                    </div>
+                                                ))}
+                                            </td>
+
+                                            <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                                {group.targetMappings.map((mapping, i) => (
+                                                    <div
+                                                        key={i}
+                                                        style={{
+                                                            padding: '8px',
+                                                            minHeight: '48px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            borderBottom:
+                                                                i !== group.targetMappings.length - 1
+                                                                    ? '1px solid #ddd'
+                                                                    : 'none'
+                                                        }}
+                                                    >
+                                                        {mapping.targetCourse?.akts || '-'}
+                                                    </div>
+                                                ))}
+                                            </td>
+
+                                            <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                                {group.targetMappings.map((mapping, i) => (
+                                                    <div
+                                                        key={i}
+                                                        style={{
+                                                            padding: '8px',
+                                                            minHeight: '48px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            borderBottom:
+                                                                i !== group.targetMappings.length - 1
+                                                                    ? '1px solid #ddd'
+                                                                    : 'none'
+                                                        }}
+                                                    >
+                                                        {mapping.finalGrade || '-'}
+                                                    </div>
+                                                ))}
+                                            </td>
+                                        </tr>
+                                    </React.Fragment>
                                 ))}
                             </tbody>
                         </table>
@@ -1061,7 +1137,20 @@ const ExemptionForm = () => {
                                             </td>
 
                                             <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
-                                                Kayıtlı
+                                                <button
+                                                    type="button"
+                                                    onClick={() => window.open(getUploadedFileUrl(file.filepath), '_blank')}
+                                                    style={{
+                                                        padding: '6px 10px',
+                                                        background: '#004a99',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Görüntüle
+                                                </button>
                                             </td>
                                         </tr>
                                     ))
@@ -1619,156 +1708,168 @@ const ExemptionForm = () => {
 
                             <tbody>
                                 {getGroupedSubmittedMappings(savedMappings).map((group, index) => (
-                                    <tr
-                                        key={index}
-                                        style={{
-                                            borderTop: index === 0 ? 'none' : '2px solid #666'
-                                        }}
-                                    >
-                                        <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
-                                            {index + 1}
-                                        </td>
+                                    <React.Fragment key={index}>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '0' }}>
-                                            {group.externalCourses.map((course, i) => (
-                                                <div
-                                                    key={i}
+                                        {index > 0 && (
+                                            <tr>
+                                                <td
+                                                    colSpan="9"
                                                     style={{
-                                                        padding: '8px',
-                                                        borderBottom: i !== group.externalCourses.length - 1 ? '1px solid #ddd' : 'none'
+                                                        padding: 0,
+                                                        height: '0px',
+                                                        borderTop: '3px solid #666',
+                                                        background: '#666'
                                                     }}
-                                                >
-                                                    {course.code} - {course.name}
-                                                </div>
-                                            ))}
-                                        </td>
+                                                />
+                                            </tr>
+                                        )}
 
-                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
-                                            {group.externalCourses.map((course, i) => (
-                                                <div
-                                                    key={i}
-                                                    style={{
-                                                        padding: '8px',
-                                                        borderBottom: i !== group.externalCourses.length - 1 ? '1px solid #ddd' : 'none'
-                                                    }}
-                                                >
-                                                    {course.sourceCredit || '-'}
-                                                </div>
-                                            ))}
-                                        </td>
+                                        <tr>
+                                            <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
+                                                {index + 1}
+                                            </td>
 
-                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
-                                            {group.externalCourses.map((course, i) => (
-                                                <div
-                                                    key={i}
-                                                    style={{
-                                                        padding: '8px',
-                                                        borderBottom: i !== group.externalCourses.length - 1 ? '1px solid #ddd' : 'none'
-                                                    }}
-                                                >
-                                                    {course.akts || '-'}
-                                                </div>
-                                            ))}
-                                        </td>
-
-                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center', fontWeight: 'bold' }}>
-                                            {group.externalCourses.map((course, i) => (
-                                                <div
-                                                    key={i}
-                                                    style={{
-                                                        padding: '8px',
-                                                        borderBottom: i !== group.externalCourses.length - 1 ? '1px solid #ddd' : 'none'
-                                                    }}
-                                                >
-                                                    {course.grade || '-'}
-                                                </div>
-                                            ))}
-                                        </td>
-
-                                        <td style={{ border: '1px solid #ddd', padding: '0' }}>
-                                            {group.targetMappings.map((mapping, i) => (
-                                                <div
-                                                    key={i}
-                                                    style={{
-                                                        padding: '8px',
-                                                        minHeight: '42px',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        borderBottom: i !== group.targetMappings.length - 1 ? '1px solid #ddd' : 'none'
-                                                    }}
-                                                >
-                                                    {mapping.targetCourse?.coursecode} - {getCleanCourseName(mapping.targetCourse?.coursename)}
-                                                </div>
-                                            ))}
-                                        </td>
-
-                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
-                                            {group.targetMappings.map((mapping, i) => (
-                                                <div
-                                                    key={i}
-                                                    style={{
-                                                        padding: '8px',
-                                                        minHeight: '42px',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        borderBottom: i !== group.targetMappings.length - 1 ? '1px solid #ddd' : 'none'
-                                                    }}
-                                                >
-                                                    {mapping.targetCourse?.localcredit || '-'}
-                                                </div>
-                                            ))}
-                                        </td>
-
-                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
-                                            {group.targetMappings.map((mapping, i) => (
-                                                <div
-                                                    key={i}
-                                                    style={{
-                                                        padding: '8px',
-                                                        minHeight: '42px',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        borderBottom: i !== group.targetMappings.length - 1 ? '1px solid #ddd' : 'none'
-                                                    }}
-                                                >
-                                                    {mapping.targetCourse?.akts || '-'}
-                                                </div>
-                                            ))}
-                                        </td>
-
-                                        <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
-                                            {group.targetMappings.map((mapping, i) => (
-                                                <div
-                                                    key={i}
-                                                    style={{
-                                                        padding: '6px',
-                                                        minHeight: '42px',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        borderBottom: i !== group.targetMappings.length - 1 ? '1px solid #ddd' : 'none'
-                                                    }}
-                                                >
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removeMapping(savedMappings.findIndex(item => item === mapping))}
+                                            <td style={{ border: '1px solid #ddd', padding: '0' }}>
+                                                {group.externalCourses.map((course, i) => (
+                                                    <div
+                                                        key={i}
                                                         style={{
-                                                            padding: '6px 10px',
-                                                            background: '#dc3545',
-                                                            color: 'white',
-                                                            border: 'none',
-                                                            borderRadius: '4px',
-                                                            cursor: 'pointer'
+                                                            padding: '8px',
+                                                            borderBottom: i !== group.externalCourses.length - 1 ? '1px solid #ddd' : 'none'
                                                         }}
                                                     >
-                                                        Sil
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </td>
-                                    </tr>
+                                                        {course.code} - {course.name}
+                                                    </div>
+                                                ))}
+                                            </td>
+
+                                            <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                                {group.externalCourses.map((course, i) => (
+                                                    <div
+                                                        key={i}
+                                                        style={{
+                                                            padding: '8px',
+                                                            borderBottom: i !== group.externalCourses.length - 1 ? '1px solid #ddd' : 'none'
+                                                        }}
+                                                    >
+                                                        {course.sourceCredit || '-'}
+                                                    </div>
+                                                ))}
+                                            </td>
+
+                                            <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                                {group.externalCourses.map((course, i) => (
+                                                    <div
+                                                        key={i}
+                                                        style={{
+                                                            padding: '8px',
+                                                            borderBottom: i !== group.externalCourses.length - 1 ? '1px solid #ddd' : 'none'
+                                                        }}
+                                                    >
+                                                        {course.akts || '-'}
+                                                    </div>
+                                                ))}
+                                            </td>
+
+                                            <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center', fontWeight: 'bold' }}>
+                                                {group.externalCourses.map((course, i) => (
+                                                    <div
+                                                        key={i}
+                                                        style={{
+                                                            padding: '8px',
+                                                            borderBottom: i !== group.externalCourses.length - 1 ? '1px solid #ddd' : 'none'
+                                                        }}
+                                                    >
+                                                        {course.grade || '-'}
+                                                    </div>
+                                                ))}
+                                            </td>
+
+                                            <td style={{ border: '1px solid #ddd', padding: '0' }}>
+                                                {group.targetMappings.map((mapping, i) => (
+                                                    <div
+                                                        key={i}
+                                                        style={{
+                                                            padding: '8px',
+                                                            minHeight: '42px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            borderBottom: i !== group.targetMappings.length - 1 ? '1px solid #ddd' : 'none'
+                                                        }}
+                                                    >
+                                                        {mapping.targetCourse?.coursecode} - {getCleanCourseName(mapping.targetCourse?.coursename)}
+                                                    </div>
+                                                ))}
+                                            </td>
+
+                                            <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                                {group.targetMappings.map((mapping, i) => (
+                                                    <div
+                                                        key={i}
+                                                        style={{
+                                                            padding: '8px',
+                                                            minHeight: '42px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            borderBottom: i !== group.targetMappings.length - 1 ? '1px solid #ddd' : 'none'
+                                                        }}
+                                                    >
+                                                        {mapping.targetCourse?.localcredit || '-'}
+                                                    </div>
+                                                ))}
+                                            </td>
+
+                                            <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                                {group.targetMappings.map((mapping, i) => (
+                                                    <div
+                                                        key={i}
+                                                        style={{
+                                                            padding: '8px',
+                                                            minHeight: '42px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            borderBottom: i !== group.targetMappings.length - 1 ? '1px solid #ddd' : 'none'
+                                                        }}
+                                                    >
+                                                        {mapping.targetCourse?.akts || '-'}
+                                                    </div>
+                                                ))}
+                                            </td>
+
+                                            <td style={{ border: '1px solid #ddd', padding: '0', textAlign: 'center' }}>
+                                                {group.targetMappings.map((mapping, i) => (
+                                                    <div
+                                                        key={i}
+                                                        style={{
+                                                            padding: '6px',
+                                                            minHeight: '42px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            borderBottom: i !== group.targetMappings.length - 1 ? '1px solid #ddd' : 'none'
+                                                        }}
+                                                    >
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeMapping(savedMappings.findIndex(item => item === mapping))}
+                                                            style={{
+                                                                padding: '6px 10px',
+                                                                background: '#dc3545',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                borderRadius: '4px',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            Sil
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </td>
+                                        </tr>
+                                    </React.Fragment>
                                 ))}
                             </tbody>
                         </table>
@@ -1925,7 +2026,41 @@ const ExemptionForm = () => {
 
                 <div style={sectionStyle}>
 
+                    <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
+                        <button
+                            type="button"
+                            onClick={saveDraft}
+                            style={{
+                                flex: 1,
+                                padding: '12px',
+                                background: '#004a99',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            Taslağı Kaydet
+                        </button>
 
+                        <button
+                            type="button"
+                            onClick={deleteDraft}
+                            style={{
+                                flex: 1,
+                                padding: '12px',
+                                background: '#dc3545',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            Taslağı Sil
+                        </button>
+                    </div>
 
                     <button
                         type="button"

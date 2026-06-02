@@ -228,16 +228,49 @@ exports.finalizeDecision = async (req, res) => {
     const { decisionId, isApproved, finalGrade, reviewNote } = req.body;
 
     try {
+        const decisionResult = await db.query(
+            `SELECT ApplicationID
+             FROM ExemptionDecisions
+             WHERE DecisionID = $1`,
+            [decisionId]
+        );
+
+        if (decisionResult.rows.length === 0) {
+            return res.status(404).json({
+                status: "error",
+                message: "Karar kaydı bulunamadı."
+            });
+        }
+
+        const applicationId = decisionResult.rows[0].applicationid;
+
         await db.query(
             `UPDATE ExemptionDecisions 
-             SET IsApproved = $1, FinalGrade = $2, ReviewNote = $3, ReviewDate = NOW()
+             SET IsApproved = $1,
+                 FinalGrade = $2,
+                 ReviewNote = $3,
+                 ReviewDate = NOW()
              WHERE DecisionID = $4`,
             [isApproved, finalGrade, reviewNote, decisionId]
         );
 
-        res.json({ status: "success", message: "Karar başarıyla kaydedildi." });
+        await db.query(
+            `UPDATE Applications
+             SET Status = 'Başvuru Sonuçlandı: Olumlu'
+             WHERE ApplicationID = $1`,
+            [applicationId]
+        );
+
+        res.json({
+            status: "success",
+            message: "Karar başarıyla kaydedildi."
+        });
+
     } catch (err) {
-        res.status(500).json({ status: "error", message: err.message });
+        res.status(500).json({
+            status: "error",
+            message: err.message
+        });
     }
 };
 
@@ -806,56 +839,13 @@ exports.uploadDocuments = async (req, res) => {
 
                 await db.query(
                     `INSERT INTO Attachments 
-                    (ApplicationID, FileType, FileName, FilePath)
-                    VALUES ($1, $2, $3, $4)`,
-                    [
-                        applicationId,
-                        item.type,
-                        file.originalname,
-                        file.path
-                    ]
-                );
-            }
-        }
-
-        res.json({
-            status: "success",
-            message: "Belgeler başarıyla yüklendi."
-        });
-
-    } catch (err) {
-        res.status(500).json({
-            status: "error",
-            message: err.message
-        });
-    }
-};
-
-exports.uploadDocuments = async (req, res) => {
-    const { applicationId } = req.body;
-
-    try {
-        const files = req.files;
-
-        const fileList = [
-            { field: 'transcript', type: 'Transkript' },
-            { field: 'curriculum', type: 'Müfredat ve Ders İçerikleri' },
-            { field: 'internship', type: 'Staj Belgesi' }
-        ];
-
-        for (const item of fileList) {
-            if (files[item.field]) {
-                const file = files[item.field][0];
-
-                await db.query(
-                    `INSERT INTO Attachments 
     (ApplicationID, FileType, FileName, FilePath)
     VALUES ($1, $2, $3, $4)`,
                     [
                         applicationId,
                         item.type,
                         Buffer.from(file.originalname, 'latin1').toString('utf8'),
-                        file.path
+                        `uploads/${file.filename}`
                     ]
                 );
             }
@@ -869,22 +859,66 @@ exports.uploadDocuments = async (req, res) => {
 
 exports.getApplicationsForCommission = async (req, res) => {
     try {
-        const result = await db.query(
-            `SELECT 
-                ApplicationID,
-                StudentNo,
-                StudentName,
-                Faculty,
-                Department,
-                Program,
-                AcademicYear,
-                Semester,
-                ExemptionReason,
-                SourceUniversity,
-                Status
-             FROM Applications
-             ORDER BY ApplicationID DESC`
+        const userId = req.user.id || req.user.userid || req.user.userId;
+
+        const userResult = await db.query(
+            `SELECT Faculty, Department, Role
+             FROM Users
+             WHERE UserID = $1`,
+            [userId]
         );
+
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({
+                status: "error",
+                message: "Kullanıcı bulunamadı."
+            });
+        }
+
+        const currentUser = userResult.rows[0];
+
+        let result;
+
+        // Öğrenci işleri isterse tüm başvuruları görebilir
+        if (currentUser.role === 'commission') {
+            result = await db.query(
+                `SELECT 
+                    ApplicationID,
+                    StudentNo,
+                    StudentName,
+                    Faculty,
+                    Department,
+                    Program,
+                    AcademicYear,
+                    Semester,
+                    ExemptionReason,
+                    SourceUniversity,
+                    Status
+                 FROM Applications
+                 ORDER BY ApplicationID DESC`
+            );
+        } else {
+            // Bölüm yetkilisi sadece kendi fakülte/bölüm başvurularını görür
+            result = await db.query(
+                `SELECT 
+                    ApplicationID,
+                    StudentNo,
+                    StudentName,
+                    Faculty,
+                    Department,
+                    Program,
+                    AcademicYear,
+                    Semester,
+                    ExemptionReason,
+                    SourceUniversity,
+                    Status
+                 FROM Applications
+                 WHERE Faculty = $1
+                 AND Department = $2
+                 ORDER BY ApplicationID DESC`,
+                [currentUser.faculty, currentUser.department]
+            );
+        }
 
         res.json({
             status: "success",

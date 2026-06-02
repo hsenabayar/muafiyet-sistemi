@@ -16,6 +16,7 @@ const AdminDashboard = () => {
     const [selectedApplication, setSelectedApplication] = useState(null);
     const [currentUser, setCurrentUser] = useState(null);
 
+
     const [newUser, setNewUser] = useState({
         username: '',
         password: '',
@@ -207,18 +208,26 @@ const AdminDashboard = () => {
         }
     };
 
-    const assignApplication = async (applicationId) => {
-        const faculty = prompt('Fakülte:');
-        const department = prompt('Bölüm:');
-
-        if (!faculty || !department) return;
+    const assignApplication = async () => {
+        if (!assignForm.applicationId || !assignForm.faculty || !assignForm.department) {
+            alert('Lütfen fakülte ve bölüm seçiniz.');
+            return;
+        }
 
         try {
-            await api.put(`/applications/admin/applications/${applicationId}/assign`, {
-                faculty,
-                department
+            await api.put(`/applications/admin/applications/${assignForm.applicationId}/assign`, {
+                faculty: assignForm.faculty,
+                department: assignForm.department
             });
+
             alert('Başvuru ilgili bölüme yönlendirildi.');
+
+            setAssignForm({
+                applicationId: null,
+                faculty: '',
+                department: ''
+            });
+
             loadAdminData();
         } catch (err) {
             alert(err.response?.data?.message || 'Başvuru yönlendirilemedi.');
@@ -310,6 +319,14 @@ const AdminDashboard = () => {
         window.location.href = '/login';
     };
 
+    const getUploadedFileUrl = (filePath) => {
+        const cleanPath = String(filePath || '')
+            .replaceAll('\\', '/')
+            .replace(/^.*uploads\//, 'uploads/');
+
+        return `http://localhost:5000/${cleanPath}`;
+    };
+
     const roleOptions = [
         { value: 'student', label: 'Öğrenci' },
         { value: 'teacher', label: 'Bölüm Yetkilisi' },
@@ -343,6 +360,12 @@ const AdminDashboard = () => {
             normalizeText(user.tckimlikno).includes(searchTerm);
 
         return roleMatch && searchMatch;
+    });
+
+    const [assignForm, setAssignForm] = useState({
+        applicationId: null,
+        faculty: '',
+        department: ''
     });
 
     const filteredCourses = curriculum.filter(course => {
@@ -510,16 +533,26 @@ const AdminDashboard = () => {
 
 
 
-                                {(newUser.role === 'student' || newUser.role === 'teacher') && (
+                                {newUser.role !== 'admin' && (
                                     <div>
-                                        <label style={formLabel}>Bölüm</label>
-                                        <input
-                                            placeholder="Bölüm"
-                                            value={newUser.department}
-                                            onChange={e => setNewUser({ ...newUser, department: e.target.value })}
+                                        <label style={formLabel}>Fakülte</label>
+                                        <select
+                                            value={newUser.faculty}
+                                            onChange={(e) =>
+                                                setNewUser({
+                                                    ...newUser,
+                                                    faculty: e.target.value,
+                                                    department: ''
+                                                })
+                                            }
                                             style={inputStyle}
-                                        />
+                                        >
+                                            <option value="">Fakülte seçiniz...</option>
+                                            <option value="Mühendislik Fakültesi">Mühendislik Fakültesi</option>
+                                        </select>
                                     </div>
+
+
                                 )}
 
 
@@ -534,19 +567,37 @@ const AdminDashboard = () => {
                                 </div>
 
 
-                                {newUser.role !== 'admin' && (
+
+                                {(newUser.role === 'student' || newUser.role === 'teacher') && (
                                     <div>
-                                        <label style={formLabel}>Fakülte</label>
-                                        <input
-                                            placeholder="Fakülte"
-                                            value={newUser.faculty}
-                                            onChange={e => setNewUser({ ...newUser, faculty: e.target.value })}
+                                        <label style={formLabel}>Bölüm</label>
+                                        <select
+                                            value={newUser.department}
+                                            onChange={(e) =>
+                                                setNewUser({
+                                                    ...newUser,
+                                                    department: e.target.value
+                                                })
+                                            }
                                             style={inputStyle}
-                                        />
+                                        >
+                                            <option value="">Bölüm seçiniz...</option>
+                                            <option value="Bilgisayar Mühendisliği">Bilgisayar Mühendisliği</option>
+                                            <option value="Çevre Mühendisliği">Çevre Mühendisliği</option>
+                                            <option value="Elektrik Elektronik Mühendisliği">Elektrik Elektronik Mühendisliği</option>
+                                            <option value="Endüstri Mühendisliği">Endüstri Mühendisliği</option>
+                                            <option value="Gıda Mühendisliği">Gıda Mühendisliği</option>
+                                            <option value="Harita Mühendisliği">Harita Mühendisliği</option>
+                                            <option value="İnşaat Mühendisliği">İnşaat Mühendisliği</option>
+                                            <option value="Kimya Mühendisliği">Kimya Mühendisliği</option>
+                                            <option value="Makine Mühendisliği">Makine Mühendisliği</option>
+                                            <option value="Metalurji ve Malzeme Mühendisliği">Metalurji ve Malzeme Mühendisliği</option>
+                                        </select>
                                     </div>
-
-
                                 )}
+
+
+
 
                                 <div>
                                     <label style={formLabel}>Geçici Şifre</label>
@@ -851,12 +902,22 @@ const AdminDashboard = () => {
 
                                 <div>
                                     <label style={formLabel}>Fakülte</label>
-                                    <input
-                                        placeholder="Fakülte"
+                                    <select
                                         value={newSetting.faculty}
-                                        onChange={e => setNewSetting({ ...newSetting, faculty: e.target.value })}
+                                        onChange={(e) =>
+                                            setNewSetting({
+                                                ...newSetting,
+                                                faculty: e.target.value,
+                                                department: ''
+                                            })
+                                        }
                                         style={inputStyle}
-                                    />
+                                    >
+                                        <option value="">Fakülte Seçiniz</option>
+                                        <option value="Mühendislik Fakültesi">
+                                            Mühendislik Fakültesi
+                                        </option>
+                                    </select>
                                 </div>
 
 
@@ -874,12 +935,29 @@ const AdminDashboard = () => {
 
                                 <div>
                                     <label style={formLabel}>Bölüm</label>
-                                    <input
-                                        placeholder="Bölüm"
+                                    <select
                                         value={newSetting.department}
-                                        onChange={e => setNewSetting({ ...newSetting, department: e.target.value })}
+                                        onChange={(e) =>
+                                            setNewSetting({
+                                                ...newSetting,
+                                                department: e.target.value
+                                            })
+                                        }
                                         style={inputStyle}
-                                    />
+                                    >
+                                        <option value="">Bölüm Seçiniz</option>
+
+                                        <option value="Bilgisayar Mühendisliği">Bilgisayar Mühendisliği</option>
+                                        <option value="Çevre Mühendisliği">Çevre Mühendisliği</option>
+                                        <option value="Elektrik Elektronik Mühendisliği">Elektrik Elektronik Mühendisliği</option>
+                                        <option value="Endüstri Mühendisliği">Endüstri Mühendisliği</option>
+                                        <option value="Gıda Mühendisliği">Gıda Mühendisliği</option>
+                                        <option value="Harita Mühendisliği">Harita Mühendisliği</option>
+                                        <option value="İnşaat Mühendisliği">İnşaat Mühendisliği</option>
+                                        <option value="Kimya Mühendisliği">Kimya Mühendisliği</option>
+                                        <option value="Makine Mühendisliği">Makine Mühendisliği</option>
+                                        <option value="Metalurji ve Malzeme Mühendisliği">Metalurji ve Malzeme Mühendisliği</option>
+                                    </select>
                                 </div>
 
                                 <div>
@@ -957,7 +1035,7 @@ const AdminDashboard = () => {
                                         <td style={tdStyle}>
                                             <input value={item.commissionmember2 || ''} onChange={e => updateSettingField(index, 'commissionmember2', e.target.value)} style={inputStyle} />
                                         </td>
-                                       
+
                                         <td style={tdStyle}>
                                             <input value={item.commissionpresident || ''} onChange={e => updateSettingField(index, 'commissionpresident', e.target.value)} style={inputStyle} />
                                         </td>
@@ -978,46 +1056,156 @@ const AdminDashboard = () => {
                 {activeTab === 'applications' && (
                     <div style={sectionStyle}>
                         <h3>Başvuru İzleme</h3>
+                        {assignForm.applicationId && (
+                            <div style={assignBox}>
+                                <h4>Başvuruyu Bölüme Yönlendir</h4>
+
+                                <div style={formGridTwo}>
+                                    <div>
+                                        <label style={formLabel}>Fakülte</label>
+                                        <select
+                                            value={assignForm.faculty}
+                                            onChange={(e) =>
+                                                setAssignForm({
+                                                    ...assignForm,
+                                                    faculty: e.target.value,
+                                                    department: ''
+                                                })
+                                            }
+                                            style={inputStyle}
+                                        >
+                                            <option value="">Fakülte seçiniz...</option>
+                                            <option value="Mühendislik Fakültesi">Mühendislik Fakültesi</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label style={formLabel}>Bölüm</label>
+                                        <select
+                                            value={assignForm.department}
+                                            onChange={(e) =>
+                                                setAssignForm({
+                                                    ...assignForm,
+                                                    department: e.target.value
+                                                })
+                                            }
+                                            style={inputStyle}
+                                        >
+                                            <option value="">Bölüm seçiniz...</option>
+                                            <option value="Bilgisayar Mühendisliği">Bilgisayar Mühendisliği</option>
+                                            <option value="Çevre Mühendisliği">Çevre Mühendisliği</option>
+                                            <option value="Elektrik Elektronik Mühendisliği">Elektrik Elektronik Mühendisliği</option>
+                                            <option value="Endüstri Mühendisliği">Endüstri Mühendisliği</option>
+                                            <option value="Gıda Mühendisliği">Gıda Mühendisliği</option>
+                                            <option value="Harita Mühendisliği">Harita Mühendisliği</option>
+                                            <option value="İnşaat Mühendisliği">İnşaat Mühendisliği</option>
+                                            <option value="Kimya Mühendisliği">Kimya Mühendisliği</option>
+                                            <option value="Makine Mühendisliği">Makine Mühendisliği</option>
+                                            <option value="Metalurji ve Malzeme Mühendisliği">Metalurji ve Malzeme Mühendisliği</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div style={{ textAlign: 'right', marginTop: '12px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setAssignForm({
+                                                applicationId: null,
+                                                faculty: '',
+                                                department: ''
+                                            })
+                                        }
+                                        style={{ ...smallButton, background: '#6c757d' }}
+                                    >
+                                        İptal
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={assignApplication}
+                                        style={primaryButton}
+                                    >
+                                        Yönlendir
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                         {selectedApplication && (
                             <div style={{ ...sectionStyle, background: '#f8f9fa' }}>
-                                <button
-                                    onClick={() => setSelectedApplication(null)}
-                                    style={smallButton}
-                                >
-                                    Detayı Kapat
-                                </button>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <h3>Başvuru Detayı</h3>
 
-                                <button
-                                    onClick={() => downloadPDF(selectedApplication.application.applicationid)}
-                                    style={{ ...smallButton, background: '#198754' }}
-                                >
-                                    PDF İndir
-                                </button>
+                                    <div>
+                                        <button
+                                            onClick={() => downloadPDF(selectedApplication.application.applicationid)}
+                                            style={{ ...smallButton, background: '#198754' }}
+                                        >
+                                            PDF İndir
+                                        </button>
 
-                                <h3>Başvuru Detayı</h3>
+                                        <button
+                                            onClick={() => setSelectedApplication(null)}
+                                            style={smallButton}
+                                        >
+                                            Detayı Kapat
+                                        </button>
+                                    </div>
+                                </div>
 
-                                <p><b>Öğrenci:</b> {selectedApplication.application.studentname}</p>
-                                <p><b>Öğrenci No:</b> {selectedApplication.application.studentno}</p>
-                                <p><b>Fakülte:</b> {selectedApplication.application.faculty}</p>
-                                <p><b>Bölüm:</b> {selectedApplication.application.department}</p>
-                                <p><b>Durum:</b> {selectedApplication.application.status}</p>
+                                <div style={detailGrid}>
+                                    <div style={infoCard}>
+                                        <h4>Öğrenci Bilgileri</h4>
+                                        <p><b>Ad Soyad:</b> {selectedApplication.application.studentname}</p>
+                                        <p><b>Öğrenci No:</b> {selectedApplication.application.studentno}</p>
+                                        <p><b>Fakülte:</b> {selectedApplication.application.faculty}</p>
+                                        <p><b>Bölüm:</b> {selectedApplication.application.department}</p>
+                                    </div>
+
+                                    <div style={infoCard}>
+                                        <h4>Başvuru Bilgileri</h4>
+                                        <p><b>Gerekçe:</b> {selectedApplication.application.exemptionreason || '-'}</p>
+                                        <p><b>Durum:</b> {selectedApplication.application.status || '-'}</p>
+                                        <p><b>Akademik Yıl:</b> {selectedApplication.application.academicyear || '-'}</p>
+                                        <p><b>Yarıyıl:</b> {selectedApplication.application.semester || '-'}</p>
+                                    </div>
+                                </div>
+
+                                <h4>Süreç Takibi</h4>
+                                <div style={processBox}>
+                                    <div>✓ Başvuru Oluşturuldu</div>
+                                    <div>✓ Bölüme Yönlendirildi</div>
+                                    <div>✓ Komisyon İncelemesi</div>
+                                    <div
+                                        style={{
+                                            color: selectedApplication.application.status?.includes('Sonuçlandı')
+                                                ? '#198754'
+                                                : '#856404',
+                                            fontWeight: 'bold'
+                                        }}
+                                    >
+                                        {selectedApplication.application.status || 'Süreç devam ediyor'}
+                                    </div>
+                                </div>
 
                                 <h4>Yüklenen Belgeler</h4>
                                 {selectedApplication.attachments?.length === 0 ? (
                                     <p>Belge yok.</p>
                                 ) : (
-                                    selectedApplication.attachments.map(file => (
-                                        <button
-                                            key={file.attachmentid}
-                                            style={smallButton}
-                                            onClick={() => {
-                                                const fileUrl = `http://localhost:5000/${file.filepath.replaceAll('\\', '/')}`;
-                                                window.open(fileUrl, '_blank');
-                                            }}
-                                        >
-                                            {file.filetype} Görüntüle
-                                        </button>
-                                    ))
+                                    <div style={{ marginBottom: '15px' }}>
+                                        {selectedApplication.attachments.map(file => (
+                                            <button
+                                                key={file.attachmentid}
+                                                style={smallButton}
+                                                onClick={() => {
+                                                    const fileUrl = `http://localhost:5000/${file.filepath.replaceAll('\\', '/')}`;
+                                                    window.open(getUploadedFileUrl(file.filepath), '_blank');
+                                                }}
+                                            >
+                                                {file.filetype} Görüntüle
+                                            </button>
+                                        ))}
+                                    </div>
                                 )}
 
                                 <h4>Ders Eşleştirmeleri</h4>
@@ -1032,37 +1220,50 @@ const AdminDashboard = () => {
                                             <th style={thStyle}>OMÜ Harf Notu</th>
                                         </tr>
                                     </thead>
+
                                     <tbody>
                                         {selectedApplication.mappings?.map((m, index) => (
                                             <tr key={index}>
                                                 <td style={tdStyle}>
-                                                    {m.externalCourses?.map(c => (
-                                                        <div key={`${c.code}-${c.name}`}>
+                                                    {m.externalCourses?.map((c, i) => (
+                                                        <div key={i} style={innerRow}>
                                                             {c.code} - {c.name}
                                                         </div>
                                                     ))}
                                                 </td>
+
                                                 <td style={tdStyle}>
-                                                    {m.externalCourses?.map(c => (
-                                                        <div key={c.code}>{c.akts}</div>
+                                                    {m.externalCourses?.map((c, i) => (
+                                                        <div key={i} style={innerRow}>
+                                                            {c.akts}
+                                                        </div>
                                                     ))}
                                                 </td>
+
                                                 <td style={tdStyle}>
-                                                    {m.externalCourses?.map(c => (
-                                                        <div key={c.code}>{c.grade}</div>
+                                                    {m.externalCourses?.map((c, i) => (
+                                                        <div key={i} style={innerRow}>
+                                                            {c.grade}
+                                                        </div>
                                                     ))}
                                                 </td>
+
                                                 <td style={tdStyle}>
                                                     {m.targetCourse?.coursecode
                                                         ? `${m.targetCourse.coursecode} - ${m.targetCourse.coursename}`
                                                         : '-'}
                                                 </td>
+
                                                 <td style={tdStyle}>{m.targetCourse?.akts || '-'}</td>
                                                 <td style={tdStyle}>{m.finalGrade || '-'}</td>
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
+
+                                <div style={adminNoteBox}>
+                                    Bu ekran yalnızca başvuru sürecini izlemek içindir. Ders eşleştirme, not ve akademik karar düzenlemeleri bölüm yetkilisi tarafından yapılır.
+                                </div>
                             </div>
                         )}
 
@@ -1088,8 +1289,17 @@ const AdminDashboard = () => {
                                         <td style={tdStyle}>{app.exemptionreason}</td>
                                         <td style={tdStyle}>{app.status}</td>
                                         <td style={tdStyle}>
-                                            <button onClick={() => assignApplication(app.applicationid)} style={smallButton}>
-                                                Bölüme Yönlendir
+                                            <button
+                                                onClick={() =>
+                                                    setAssignForm({
+                                                        applicationId: app.applicationid,
+                                                        faculty: app.faculty || '',
+                                                        department: app.department || ''
+                                                    })
+                                                }
+                                                style={smallButton}
+                                            >
+                                                {app.department ? 'Yönlendirmeyi Güncelle' : 'Bölüme Yönlendir'}
                                             </button>
                                             <button onClick={() => openApplicationDetail(app.applicationid)} style={smallButton}>
                                                 Detay Gör
@@ -1138,6 +1348,55 @@ const formLabel = {
     fontWeight: 'bold',
     marginBottom: '5px',
     fontSize: '13px'
+};
+
+const detailGrid = {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '15px',
+    marginBottom: '15px'
+};
+
+const infoCard = {
+    background: 'white',
+    border: '1px solid #ddd',
+    borderRadius: '8px',
+    padding: '12px'
+};
+
+const processBox = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: '8px',
+    background: 'white',
+    border: '1px solid #ddd',
+    borderRadius: '8px',
+    padding: '12px',
+    marginBottom: '15px',
+    textAlign: 'center'
+};
+
+const innerRow = {
+    padding: '5px 0',
+    borderBottom: '1px solid #eee'
+};
+
+const adminNoteBox = {
+    marginTop: '15px',
+    padding: '10px',
+    background: '#fff3cd',
+    border: '1px solid #ffeeba',
+    borderRadius: '6px',
+    color: '#856404',
+    fontSize: '13px'
+};
+
+const assignBox = {
+    background: '#f8f9fa',
+    border: '1px solid #ddd',
+    borderRadius: '8px',
+    padding: '15px',
+    marginBottom: '18px'
 };
 const cardGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' };
 const cardStyle = { background: '#f8f9fa', border: '1px solid #ddd', borderRadius: '8px', padding: '15px' };
