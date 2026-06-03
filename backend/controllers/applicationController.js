@@ -372,17 +372,28 @@ exports.generatePDF = async (req, res) => {
         };
 
         // BAŞLIK
-        doc.font('TR-Bold').fontSize(11).text('T.C.', 0, 35, { align: 'center' });
-        doc.fontSize(13).text('ONDOKUZ MAYIS ÜNİVERSİTESİ', { align: 'center' });
-        doc.fontSize(12).text('DERS MUAFİYET BAŞVURU FORMU', { align: 'center' });
+        // BAŞLIK
+        const logoPath = path.join(__dirname, '..', 'assets', 'omu-logo.png');
 
-        doc.font('TR').fontSize(7).text(
-            'PP1.2.FR.0041, R0, Temmuz 2019',
-            right - 120,
-            35
-        );
+        if (fs.existsSync(logoPath)) {
+            doc.image(logoPath, left + 10, 28, {
+                width: 55
+            });
+        }
 
-        let y = 95;
+        doc.font('TR-Bold').fontSize(11).text('T.C.', 0, 28, {
+            align: 'center'
+        });
+
+        doc.font('TR-Bold').fontSize(13).text('ONDOKUZ MAYIS ÜNİVERSİTESİ', 0, 43, {
+            align: 'center'
+        });
+
+        doc.font('TR-Bold').fontSize(12).text('DERS MUAFİYET BAŞVURU FORMU', 0, 60, {
+            align: 'center'
+        });
+
+        let y = 125;
 
         // AKADEMİK YIL
         cell(left, y, 100, 22, 'Akademik Yıl', { bold: true });
@@ -554,16 +565,56 @@ exports.generatePDF = async (req, res) => {
 
         y += 30;
 
+        const attachmentsResult = await db.query(
+            `SELECT FileType
+     FROM Attachments
+     WHERE ApplicationID = $1`,
+            [id]
+        );
+
+        const attachments = attachmentsResult.rows;
+
+        const hasTranscript =
+            attachments.some(a => a.filetype === 'Transkript');
+
+        const hasCurriculum =
+            attachments.some(a => a.filetype === 'Müfredat ve Ders İçerikleri');
+
+        const hasInternship =
+            attachments.some(a => a.filetype === 'Staj Belgesi');
+
         // EKLER
         doc.font('TR-Bold').fontSize(9).text('EKLER', left, y);
         y += 15;
 
-        doc.font('TR').fontSize(8).text('☐ 1. Öğrencinin onaylı not durum belgesi/transkripti.', left, y);
-        y += 13;
-        doc.text('☐ 2. Onaylı müfredat ve ders içerikleri', left, y);
-        y += 13;
-        doc.text('☐ 3. Transkriptte yoksa staj durumunu gösteren belge.', left, y);
-        y += 25;
+        const checkboxLine = (checked, text) => {
+            const boxSize = 7;
+
+            doc.rect(left, y + 2, boxSize, boxSize).stroke();
+
+            if (checked) {
+                doc.font('TR-Bold').fontSize(7).text('X', left + 1.5, y + 1);
+            }
+
+            doc.font('TR').fontSize(8).text(text, left + 20, y);
+
+            y += 13;
+        };
+
+        checkboxLine(
+            hasTranscript,
+            '1. Öğrencinin onaylı not durum belgesi/transkripti.'
+        );
+
+        checkboxLine(
+            hasCurriculum,
+            '2. Onaylı müfredat ve ders içerikleri'
+        );
+
+        checkboxLine(
+            hasInternship,
+            '3. Transkriptte yoksa staj durumunu gösteren belge.'
+        );
 
         // AÇIKLAMALAR
         doc.font('TR-Bold').fontSize(9).text('AÇIKLAMALAR', left, y);
@@ -628,7 +679,19 @@ exports.generatePDF = async (req, res) => {
             'Bölüm Başkanı'
         );
 
-        doc.font('TR').fontSize(7).text('Sayfa 1 / 1', right - 60, 760);
+        doc.moveTo(left, 735).lineTo(right, 735).stroke();
+
+        doc.font('TR').fontSize(7).text(
+            'PP1.2.FR.0041, R0, Temmuz 2019',
+            left,
+            740
+        );
+
+        doc.font('TR-Bold').fontSize(7).text(
+            'Sayfa 1 / 1',
+            right - 70,
+            755
+        );
 
         doc.end();
 
@@ -644,16 +707,18 @@ exports.getCurriculumCourses = async (req, res) => {
     try {
         const courses = await db.query(
             `SELECT 
-                courseid,
-                coursecode,
-                coursename,
-                localcredit,
-                akts,
-                semester,
-                coursetype,
-                prerequisitecode
-             FROM curriculum 
-             ORDER BY coursecode ASC`
+            courseid,
+            faculty,
+            department,
+            coursecode,
+            coursename,
+            localcredit,
+            akts,
+            semester,
+            coursetype,
+            prerequisitecode
+        FROM curriculum 
+        ORDER BY faculty, department, coursecode ASC`
         );
 
         res.json({ status: "success", data: courses.rows });
@@ -1781,6 +1846,8 @@ exports.assignApplicationDepartmentByAdmin = async (req, res) => {
 
 exports.createCurriculumCourseByAdmin = async (req, res) => {
     const {
+        faculty,
+        department,
         courseCode,
         courseName,
         localCredit,
@@ -1793,9 +1860,11 @@ exports.createCurriculumCourseByAdmin = async (req, res) => {
     try {
         await db.query(
             `INSERT INTO Curriculum
-             (CourseCode, CourseName, LocalCredit, AKTS, Semester, CourseType, PrerequisiteCode)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+     (Faculty, Department, CourseCode, CourseName, LocalCredit, AKTS, Semester, CourseType, PrerequisiteCode)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
             [
+                faculty || null,
+                department || null,
                 courseCode,
                 courseName,
                 localCredit === '' ? null : Number(localCredit),
@@ -1818,6 +1887,8 @@ exports.createCurriculumCourseByAdmin = async (req, res) => {
 exports.updateCurriculumCourseByAdmin = async (req, res) => {
     const { courseId } = req.params;
     const {
+        faculty,
+        department,
         courseCode,
         courseName,
         localCredit,
@@ -1830,15 +1901,19 @@ exports.updateCurriculumCourseByAdmin = async (req, res) => {
     try {
         await db.query(
             `UPDATE Curriculum
-             SET CourseCode = $1,
-                 CourseName = $2,
-                 LocalCredit = $3,
-                 AKTS = $4,
-                 Semester = $5,
-                 CourseType = $6,
-                 PrerequisiteCode = $7
-             WHERE CourseID = $8`,
+     SET Faculty = $1,
+         Department = $2,
+         CourseCode = $3,
+         CourseName = $4,
+         LocalCredit = $5,
+         AKTS = $6,
+         Semester = $7,
+         CourseType = $8,
+         PrerequisiteCode = $9
+     WHERE CourseID = $10`,
             [
+                faculty || null,
+                department || null,
                 courseCode,
                 courseName,
                 localCredit === '' ? null : Number(localCredit),
