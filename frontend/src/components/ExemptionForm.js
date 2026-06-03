@@ -34,7 +34,7 @@ const ExemptionForm = () => {
     const [curriculumFile, setCurriculumFile] = useState(null);
     const [internshipFile, setInternshipFile] = useState(null);
     const [currentUser, setCurrentUser] = useState(null);
-    const DRAFT_KEY = 'exemptionApplicationDraft';
+
 
     useEffect(() => {
         api.get('/auth/me')
@@ -67,6 +67,26 @@ const ExemptionForm = () => {
                     const app = res.data.data.application;
                     const mappings = res.data.data.mappings || [];
                     const attachments = res.data.data.attachments || [];
+
+                    if (app.status === 'Taslak') {
+                        setSubmittedApplication(null);
+                        setApplicationId(app.applicationid);
+
+                        setAcademicYear(app.academicyear || '');
+                        setSemester(app.semester || '');
+                        setExemptionReason(app.exemptionreason || '');
+                        setSourceUniversity(app.sourceuniversity || '');
+                        setSourceFaculty(app.sourcefaculty || '');
+                        setSourceDepartment(app.sourcedepartment || '');
+                        setIntakeNote(app.intakenote || '');
+                        setSavedMappings(mappings || []);
+
+                        setWarnings(generateWarnings(mappings || []));
+
+                        setWarnings([...new Set(restoredWarnings)]);
+
+                        return;
+                    }
 
                     setApplicationId(app.applicationid);
 
@@ -114,25 +134,7 @@ const ExemptionForm = () => {
             .catch(err => {
                 console.error("Son başvuru alınamadı:", err.response?.data || err.message);
             });
-        try {
-            const savedDraft = localStorage.getItem(DRAFT_KEY);
 
-            if (savedDraft) {
-                const draft = JSON.parse(savedDraft);
-
-                setAcademicYear(draft.academicYear || '');
-                setSemester(draft.semester || '');
-                setExemptionReason(draft.exemptionReason || '');
-                setSourceUniversity(draft.sourceUniversity || '');
-                setSourceFaculty(draft.sourceFaculty || '');
-                setSourceDepartment(draft.sourceDepartment || '');
-                setIntakeNote(draft.intakeNote || '');
-                setSavedMappings(Array.isArray(draft.savedMappings) ? draft.savedMappings : []);
-            }
-        } catch (err) {
-            console.error('Taslak okunamadı:', err);
-            localStorage.removeItem(DRAFT_KEY);
-        }
     }, []);
 
 
@@ -308,38 +310,57 @@ const ExemptionForm = () => {
         setExternalCourses(externalCourses.filter((_, i) => i !== index));
     };
 
-    const saveDraft = () => {
-        const draft = {
-            academicYear,
-            semester,
-            exemptionReason,
-            sourceUniversity,
-            sourceFaculty,
-            sourceDepartment,
-            intakeNote,
-            savedMappings
-        };
+    const saveDraft = async () => {
+        if (!academicYear || !semester || !exemptionReason || !sourceUniversity) {
+            alert("Taslak kaydetmek için başvuru bilgilerini doldurunuz.");
+            return;
+        }
 
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-        alert('Başvuru taslağı kaydedildi.');
+        try {
+            const appRes = await api.post('/applications/save-draft', {
+                applicationId,
+                academicYear,
+                semester,
+                exemptionReason,
+                sourceUniversity,
+                sourceFaculty,
+                sourceDepartment,
+                intakeNote,
+                studentNo,
+                studentName,
+                tcNo,
+                faculty,
+                department,
+                program,
+                mappings: savedMappings
+            });
+
+            const draftApplicationId =
+                appRes.data.applicationId || appRes.data.data?.applicationId;
+
+            setApplicationId(draftApplicationId);
+
+            const formData = new FormData();
+            formData.append('applicationId', draftApplicationId);
+
+            if (transcriptFile) formData.append('transcript', transcriptFile);
+            if (curriculumFile) formData.append('curriculum', curriculumFile);
+            if (internshipFile) formData.append('internship', internshipFile);
+
+            if (transcriptFile || curriculumFile || internshipFile) {
+                await api.post('/applications/upload-documents', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+            }
+
+            alert("Başvuru taslağı kaydedildi.");
+        } catch (err) {
+            alert(err.response?.data?.message || "Taslak kaydedilemedi.");
+        }
     };
 
     const deleteDraft = () => {
-        if (!window.confirm('Taslağı silmek istediğine emin misin?')) return;
-
-        localStorage.removeItem(DRAFT_KEY);
-
-        setAcademicYear('');
-        setSemester('');
-        setExemptionReason('');
-        setSourceUniversity('');
-        setSourceFaculty('');
-        setSourceDepartment('');
-        setIntakeNote('');
-        setSavedMappings([]);
-        setWarnings([]);
-
-        alert('Taslak silindi.');
+        alert("Taslak silme işlemini backend ile bağlayacağız. Şimdilik bu butonu kullanma.");
     };
 
     const createApplication = async () => {
@@ -370,6 +391,53 @@ const ExemptionForm = () => {
         } catch (err) {
             alert(err.response?.data?.message || "Başvuru taslağı oluşturulamadı.");
         }
+    };
+
+    const generateWarnings = (mappings = []) => {
+        const warningList = [];
+
+        const selectedTargetCodes = mappings.map(mapping =>
+            normalizeCode(mapping.targetCourse?.coursecode)
+        );
+
+        mappings.forEach(mapping => {
+            const prerequisite = getPrerequisite(mapping.targetCourse);
+
+            if (prerequisite) {
+                const missingPrerequisites = prerequisite
+                    .split(',')
+                    .map(p => p.trim())
+                    .filter(Boolean)
+                    .filter(prereq =>
+                        !selectedTargetCodes.includes(normalizeCode(prereq))
+                    );
+
+                if (missingPrerequisites.length > 0) {
+                    warningList.push(
+                        `${mapping.targetCourse?.coursecode} - ${getCleanCourseName(mapping.targetCourse?.coursename)} dersi için ön koşul bulunmaktadır. Eksik ön koşullar: ${missingPrerequisites.join(', ')}.`
+                    );
+                }
+            }
+        });
+
+        const packageCounts = {};
+
+        mappings.forEach(mapping => {
+            const packageName = getPackageName(mapping.targetCourse);
+            if (packageName) {
+                packageCounts[packageName] = (packageCounts[packageName] || 0) + 1;
+            }
+        });
+
+        Object.keys(packageCounts).forEach(packageName => {
+            if (packageCounts[packageName] > 1) {
+                warningList.push(
+                    `Aynı seçmeli paketten birden fazla ders seçildi: ${packageName}. Nihai karar komisyon tarafından verilmelidir.`
+                );
+            }
+        });
+
+        return [...new Set(warningList)];
     };
 
     const checkWarnings = (newMapping) => {
@@ -474,9 +542,12 @@ const ExemptionForm = () => {
             ...newMappings
         ]);
 
-        setWarnings(
-            newMappings.flatMap(mapping => checkWarnings(mapping))
-        );
+        const allWarnings = [
+            ...warnings,
+            ...newMappings.flatMap(mapping => checkWarnings(mapping))
+        ];
+
+        setWarnings([...new Set(allWarnings)]);
 
         alert("Ders eşleştirmesi başvuruya eklendi.");
 
@@ -597,7 +668,7 @@ const ExemptionForm = () => {
             });
 
             setApplicationId(newApplicationId);
-            localStorage.removeItem(DRAFT_KEY);
+
 
             setSubmittedApplication({
                 applicationId: newApplicationId,
@@ -687,6 +758,16 @@ const ExemptionForm = () => {
     };
 
     if (submittedApplication) {
+        const currentStatus = getOverallApplicationStatus(
+            submittedApplication.mappings,
+            submittedApplication.status
+        );
+
+        const isCompletedPositive = currentStatus === 'Başvuru Sonuçlandı: Olumlu';
+        const isCompletedNegative = currentStatus === 'Başvuru Sonuçlandı: Olumsuz';
+        const isCompleted = isCompletedPositive || isCompletedNegative;
+        const isInReview = currentStatus === 'Komisyon İncelemesinde';
+        const summaryWarnings = generateWarnings(submittedApplication.mappings || []);
         return (
             <div style={{ backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '25px' }}>
                 <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
@@ -769,24 +850,26 @@ const ExemptionForm = () => {
 
                         <div style={{
                             padding: '15px',
-                            backgroundColor: getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status)
-                                === 'Onaylandı'
+                            backgroundColor: isCompletedPositive
                                 ? '#d1e7dd'
-                                : getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status) === 'Reddedildi'
+                                : isCompletedNegative
                                     ? '#f8d7da'
-                                    : '#e7f3ff',
-                            border:
-                                getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status) === 'Onaylandı'
-                                    ? '1px solid #badbcc'
-                                    : getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status) === 'Reddedildi'
-                                        ? '1px solid #f5c2c7'
+                                    : isInReview
+                                        ? '#fff3cd'
+                                        : '#e7f3ff',
+                            border: isCompletedPositive
+                                ? '1px solid #badbcc'
+                                : isCompletedNegative
+                                    ? '1px solid #f5c2c7'
+                                    : isInReview
+                                        ? '1px solid #ffecb5'
                                         : '1px solid #b6d4fe',
                             borderRadius: '6px',
                             marginBottom: '15px',
                             fontWeight: 'bold',
                             fontSize: '16px'
                         }}>
-                            Güncel Durum: {getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status)}
+                            Güncel Durum: {currentStatus}
                         </div>
 
                         <div style={{
@@ -795,56 +878,44 @@ const ExemptionForm = () => {
                             gap: '10px',
                             textAlign: 'center'
                         }}>
-
-                            {/* 1 */}
                             <div style={{
                                 padding: '10px',
-                                background:
-                                    submittedApplication
-                                        ? '#d1e7dd'
-                                        : '#f8f9fa',
+                                background: '#d1e7dd',
                                 borderRadius: '6px',
                                 fontWeight: 'bold'
                             }}>
                                 ✓ Başvuru Gönderildi
                             </div>
 
-                            {/* 2 */}
                             <div style={{
                                 padding: '10px',
-                                background:
-                                    getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status) === 'Komisyon İncelemesinde'
+                                background: isCompleted
+                                    ? '#d1e7dd'
+                                    : isInReview
                                         ? '#fff3cd'
-                                        : (
-                                            getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status) === 'Onaylandı' ||
-                                            getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status) === 'Reddedildi' ||
-                                            getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status) === 'Kısmen Karar Verildi'
-                                        )
-                                            ? '#d1e7dd'
-                                            : '#f8f9fa',
+                                        : '#f8f9fa',
                                 borderRadius: '6px',
                                 fontWeight: 'bold'
                             }}>
-                                2. Komisyon İncelemesinde
+                                {isCompleted ? '✓ Komisyon İncelemesi Tamamlandı' : '2. Komisyon İncelemesinde'}
                             </div>
 
-                            {/* 3 */}
                             <div style={{
                                 padding: '10px',
-                                background:
-                                    getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status) === 'Başvuru Sonuçlandı: Olumlu'
-                                        ? '#d1e7dd'
-                                        : getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status) === 'Başvuru Sonuçlandı: Olumsuz'
-                                            ? '#f8d7da'
-                                            : '#f8f9fa',
+                                background: isCompletedPositive
+                                    ? '#d1e7dd'
+                                    : isCompletedNegative
+                                        ? '#f8d7da'
+                                        : '#f8f9fa',
                                 borderRadius: '6px',
                                 fontWeight: 'bold'
                             }}>
-                                {getOverallApplicationStatus(submittedApplication.mappings, submittedApplication.status)}
+                                {isCompletedPositive
+                                    ? '✓ Başvuru Sonuçlandı: Olumlu'
+                                    : isCompletedNegative
+                                        ? '✕ Başvuru Sonuçlandı: Olumsuz'
+                                        : '3. Sonuç Bekleniyor'}
                             </div>
-
-
-
                         </div>
                     </div>
 
@@ -1113,6 +1184,23 @@ const ExemptionForm = () => {
                             <strong>Toplam Talep Edilen OMÜ AKTS:</strong> {submittedApplication.totalTargetAkts}
                         </div>
                     </div>
+                    {summaryWarnings.length > 0 && (
+                        <div style={{
+                            marginTop: '15px',
+                            padding: '12px',
+                            background: '#fff3cd',
+                            border: '1px solid #ffecb5',
+                            borderRadius: '6px',
+                            color: '#664d03'
+                        }}>
+                            <strong>Sistem Uyarıları</strong>
+                            <ul style={{ marginBottom: 0 }}>
+                                {summaryWarnings.map((warning, index) => (
+                                    <li key={index}>{warning}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                     <div style={sectionStyle}>
                         <h3>Yüklenen Belgeler</h3>
 

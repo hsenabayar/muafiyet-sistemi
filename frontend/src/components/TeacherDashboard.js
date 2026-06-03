@@ -39,6 +39,7 @@ const TeacherDashboard = () => {
     // 🎯 Yeni: Hoca satırın içine doğrudan kaynak ders eklemek istediğinde açılacak panel state'i
     const [activeAddExternalRow, setActiveAddExternalRow] = useState(null);
     const [selectedReason, setSelectedReason] = useState('Tümü');
+    const [selectedStatus, setSelectedStatus] = useState('Tümü');
     const [decisionEdits, setDecisionEdits] = useState({});
     const [emptyMappingFormOpen, setEmptyMappingFormOpen] = useState(false);
 
@@ -115,6 +116,73 @@ const TeacherDashboard = () => {
 
     const getCleanCourseName = (courseName) => {
         return String(courseName || '').replace(/\s*\([^)]+\)\s*/g, '').trim();
+    };
+
+    const normalizeCode = (code) => {
+        return String(code || '')
+            .trim()
+            .toUpperCase()
+            .replaceAll('İ', 'I');
+    };
+
+    const getPrerequisite = (course) => {
+        return (
+            course?.prerequisitecode ||
+            course?.prerequisite ||
+            course?.precondition ||
+            course?.onkosul ||
+            ''
+        );
+    };
+
+    const getCommissionWarnings = (mappings = []) => {
+        const warningList = [];
+
+        const selectedTargetCodes = mappings.map(mapping =>
+            normalizeCode(mapping.targetCourse?.coursecode)
+        );
+
+        mappings.forEach(mapping => {
+            const targetCourse = mapping.targetCourse;
+            const prerequisite = getPrerequisite(targetCourse);
+
+            if (prerequisite) {
+                const prerequisiteList = prerequisite
+                    .split(',')
+                    .map(item => item.trim())
+                    .filter(Boolean);
+
+                const missingPrerequisites = prerequisiteList.filter(prereq =>
+                    !selectedTargetCodes.includes(normalizeCode(prereq))
+                );
+
+                if (missingPrerequisites.length > 0) {
+                    warningList.push(
+                        `${targetCourse?.coursecode} - ${getCleanCourseName(targetCourse?.coursename)} dersi için ön koşul bulunmaktadır. Eksik ön koşullar: ${missingPrerequisites.join(', ')}.`
+                    );
+                }
+            }
+        });
+
+        const packageCounts = {};
+
+        mappings.forEach(mapping => {
+            const packageName = getPackageName(mapping.targetCourse);
+
+            if (packageName) {
+                packageCounts[packageName] = (packageCounts[packageName] || 0) + 1;
+            }
+        });
+
+        Object.keys(packageCounts).forEach(packageName => {
+            if (packageCounts[packageName] > 1) {
+                warningList.push(
+                    `Aynı seçmeli paketten birden fazla ders seçildi: ${packageName}. Nihai karar komisyon tarafından verilmelidir.`
+                );
+            }
+        });
+
+        return [...new Set(warningList)];
     };
 
     const getSemesterName = (course) => {
@@ -447,10 +515,24 @@ const TeacherDashboard = () => {
         'Diğer'
     ];
 
-    const filteredApplications =
-        selectedReason === 'Tümü'
-            ? applications
-            : applications.filter(app => app.exemptionreason === selectedReason);
+    const statusOptions = [
+        'Tümü',
+        'Komisyona Gönderildi',
+        'Başvuru Sonuçlandı: Olumlu',
+        'Başvuru Sonuçlandı: Olumsuz'
+    ];
+
+    const filteredApplications = applications.filter(app => {
+        const reasonMatch =
+            selectedReason === 'Tümü' ||
+            app.exemptionreason === selectedReason;
+
+        const statusMatch =
+            selectedStatus === 'Tümü' ||
+            app.status === selectedStatus;
+
+        return reasonMatch && statusMatch;
+    });
 
     if (loading) {
         return <div style={{ padding: '30px' }}>Başvurular yükleniyor...</div>;
@@ -461,6 +543,7 @@ const TeacherDashboard = () => {
         const rawMappings = selectedApplication.mappings || [];
         const attachments = selectedApplication.attachments || [];
         const structuredGroups = getGroupedMappings(rawMappings);
+        const commissionWarnings = getCommissionWarnings(rawMappings);
 
         return (
             <div style={pageStyle}>
@@ -1095,6 +1178,24 @@ const TeacherDashboard = () => {
                                     </tbody>
                                 </table>
 
+                                {commissionWarnings.length > 0 && (
+                                    <div style={{
+                                        marginTop: '15px',
+                                        padding: '12px',
+                                        background: '#fff3cd',
+                                        border: '1px solid #ffecb5',
+                                        borderRadius: '6px',
+                                        color: '#664d03'
+                                    }}>
+                                        <strong>Komisyon Uyarıları</strong>
+                                        <ul style={{ marginBottom: 0 }}>
+                                            {commissionWarnings.map((warning, index) => (
+                                                <li key={index}>{warning}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
                                 <div style={{
                                     marginTop: '20px',
                                     padding: '15px',
@@ -1236,6 +1337,7 @@ const TeacherDashboard = () => {
 
                 <div style={{ marginBottom: '15px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     {reasonOptions.map(reason => (
+
                         <button
                             key={reason}
                             type="button"
@@ -1251,6 +1353,27 @@ const TeacherDashboard = () => {
                             }}
                         >
                             {reason}
+                        </button>
+                    ))}
+                </div>
+
+                <div style={{ marginBottom: '15px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {statusOptions.map(status => (
+                        <button
+                            key={status}
+                            type="button"
+                            onClick={() => setSelectedStatus(status)}
+                            style={{
+                                padding: '8px 12px',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                backgroundColor: selectedStatus === status ? '#198754' : '#e9ecef',
+                                color: selectedStatus === status ? 'white' : 'black',
+                                fontWeight: selectedStatus === status ? 'bold' : 'normal'
+                            }}
+                        >
+                            {status}
                         </button>
                     ))}
                 </div>

@@ -3,7 +3,6 @@ const router = express.Router();
 
 const appController = require('../controllers/applicationController');
 const { verifyToken, checkRole } = require('../middleware/authMiddleware');
-const authMiddleware = require('../middleware/authMiddleware');
 
 
 // ======================================================
@@ -51,6 +50,13 @@ router.post(
         { name: 'internship', maxCount: 1 }
     ]),
     appController.uploadDocuments
+);
+
+router.post(
+    '/save-draft',
+    verifyToken,
+    checkRole(['student']),
+    appController.saveDraftApplication
 );
 
 
@@ -248,6 +254,13 @@ router.delete(
     verifyToken,
     checkRole(['admin']),
     appController.deleteDepartmentSetting
+);
+
+router.delete(
+    '/admin/applications/:id',
+    verifyToken,
+    checkRole(['admin']),
+    appController.deleteApplication
 );
 
 

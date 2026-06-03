@@ -140,6 +140,36 @@ const AdminDashboard = () => {
         }
     };
 
+    const deleteApplication = async (applicationId) => {
+        if (
+            !window.confirm(
+                'Bu başvuruyu kalıcı olarak silmek istediğinize emin misiniz?'
+            )
+        ) return;
+
+        try {
+            await api.delete(
+                `/applications/admin/applications/${applicationId}`
+            );
+
+            alert('Başvuru silindi.');
+            loadAdminData();
+
+            if (
+                selectedApplication &&
+                selectedApplication.application.applicationid === applicationId
+            ) {
+                setSelectedApplication(null);
+            }
+
+        } catch (err) {
+            alert(
+                err.response?.data?.message ||
+                'Başvuru silinemedi.'
+            );
+        }
+    };
+
     const createCourse = async () => {
         try {
             await api.post('/applications/admin/curriculum', newCourse);
@@ -325,6 +355,79 @@ const AdminDashboard = () => {
             .replace(/^.*uploads\//, 'uploads/');
 
         return `http://localhost:5000/${cleanPath}`;
+    };
+
+    const normalizeCode = (code) => {
+        return String(code || '')
+            .trim()
+            .toUpperCase()
+            .replaceAll('İ', 'I');
+    };
+
+    const getCleanCourseName = (courseName) => {
+        return String(courseName || '').replace(/\s*\([^)]+\)\s*/g, '').trim();
+    };
+
+    const getPrerequisite = (course) => {
+        return course?.prerequisitecode || '';
+    };
+
+    const getPackageName = (course) => {
+        const type = course?.coursetype || '';
+        if (type) return type;
+
+        const courseName = course?.coursename || '';
+        const match = courseName.match(/\(([^)]+)\)/);
+
+        return match ? match[1].trim() : '';
+    };
+
+    const generateWarnings = (mappings = []) => {
+        const warningList = [];
+
+        const selectedTargetCodes = mappings.map(mapping =>
+            normalizeCode(mapping.targetCourse?.coursecode)
+        );
+
+        mappings.forEach(mapping => {
+            const prerequisite = getPrerequisite(mapping.targetCourse);
+
+            if (prerequisite) {
+                const missingPrerequisites = prerequisite
+                    .split(',')
+                    .map(p => p.trim())
+                    .filter(Boolean)
+                    .filter(prereq =>
+                        !selectedTargetCodes.includes(normalizeCode(prereq))
+                    );
+
+                if (missingPrerequisites.length > 0) {
+                    warningList.push(
+                        `${mapping.targetCourse?.coursecode} - ${getCleanCourseName(mapping.targetCourse?.coursename)} dersi için ön koşul bulunmaktadır. Eksik ön koşullar: ${missingPrerequisites.join(', ')}.`
+                    );
+                }
+            }
+        });
+
+        const packageCounts = {};
+
+        mappings.forEach(mapping => {
+            const packageName = getPackageName(mapping.targetCourse);
+
+            if (packageName) {
+                packageCounts[packageName] = (packageCounts[packageName] || 0) + 1;
+            }
+        });
+
+        Object.keys(packageCounts).forEach(packageName => {
+            if (packageCounts[packageName] > 1) {
+                warningList.push(
+                    `Aynı seçmeli paketten birden fazla ders seçildi: ${packageName}. Nihai karar komisyon tarafından verilmelidir.`
+                );
+            }
+        });
+
+        return [...new Set(warningList)];
     };
 
     const roleOptions = [
@@ -1131,143 +1234,165 @@ const AdminDashboard = () => {
                                 </div>
                             </div>
                         )}
-                        {selectedApplication && (
-                            <div style={{ ...sectionStyle, background: '#f8f9fa' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <h3>Başvuru Detayı</h3>
+                        {selectedApplication && (() => {
+                            const adminWarnings = generateWarnings(selectedApplication.mappings || []);
 
-                                    <div>
-                                        <button
-                                            onClick={() => downloadPDF(selectedApplication.application.applicationid)}
-                                            style={{ ...smallButton, background: '#198754' }}
-                                        >
-                                            PDF İndir
-                                        </button>
+                            return (
+                                <div style={{ ...sectionStyle, background: '#f8f9fa' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <h3>Başvuru Detayı</h3>
 
-                                        <button
-                                            onClick={() => setSelectedApplication(null)}
-                                            style={smallButton}
-                                        >
-                                            Detayı Kapat
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div style={detailGrid}>
-                                    <div style={infoCard}>
-                                        <h4>Öğrenci Bilgileri</h4>
-                                        <p><b>Ad Soyad:</b> {selectedApplication.application.studentname}</p>
-                                        <p><b>Öğrenci No:</b> {selectedApplication.application.studentno}</p>
-                                        <p><b>Fakülte:</b> {selectedApplication.application.faculty}</p>
-                                        <p><b>Bölüm:</b> {selectedApplication.application.department}</p>
-                                    </div>
-
-                                    <div style={infoCard}>
-                                        <h4>Başvuru Bilgileri</h4>
-                                        <p><b>Gerekçe:</b> {selectedApplication.application.exemptionreason || '-'}</p>
-                                        <p><b>Durum:</b> {selectedApplication.application.status || '-'}</p>
-                                        <p><b>Akademik Yıl:</b> {selectedApplication.application.academicyear || '-'}</p>
-                                        <p><b>Yarıyıl:</b> {selectedApplication.application.semester || '-'}</p>
-                                    </div>
-                                </div>
-
-                                <h4>Süreç Takibi</h4>
-                                <div style={processBox}>
-                                    <div>✓ Başvuru Oluşturuldu</div>
-                                    <div>✓ Bölüme Yönlendirildi</div>
-                                    <div>✓ Komisyon İncelemesi</div>
-                                    <div
-                                        style={{
-                                            color: selectedApplication.application.status?.includes('Sonuçlandı')
-                                                ? '#198754'
-                                                : '#856404',
-                                            fontWeight: 'bold'
-                                        }}
-                                    >
-                                        {selectedApplication.application.status || 'Süreç devam ediyor'}
-                                    </div>
-                                </div>
-
-                                <h4>Yüklenen Belgeler</h4>
-                                {selectedApplication.attachments?.length === 0 ? (
-                                    <p>Belge yok.</p>
-                                ) : (
-                                    <div style={{ marginBottom: '15px' }}>
-                                        {selectedApplication.attachments.map(file => (
+                                        <div>
                                             <button
-                                                key={file.attachmentid}
-                                                style={smallButton}
-                                                onClick={() => {
-                                                    const fileUrl = `http://localhost:5000/${file.filepath.replaceAll('\\', '/')}`;
-                                                    window.open(getUploadedFileUrl(file.filepath), '_blank');
-                                                }}
+                                                onClick={() => downloadPDF(selectedApplication.application.applicationid)}
+                                                style={{ ...smallButton, background: '#198754' }}
                                             >
-                                                {file.filetype} Görüntüle
+                                                PDF İndir
                                             </button>
-                                        ))}
+
+                                            <button
+                                                onClick={() => setSelectedApplication(null)}
+                                                style={smallButton}
+                                            >
+                                                Detayı Kapat
+                                            </button>
+                                        </div>
                                     </div>
-                                )}
 
-                                <h4>Ders Eşleştirmeleri</h4>
-                                <table style={tableStyle}>
-                                    <thead>
-                                        <tr>
-                                            <th style={thStyle}>Kaynak Ders</th>
-                                            <th style={thStyle}>Kaynak AKTS</th>
-                                            <th style={thStyle}>Harf Notu</th>
-                                            <th style={thStyle}>Hedef OMÜ Dersi</th>
-                                            <th style={thStyle}>OMÜ AKTS</th>
-                                            <th style={thStyle}>OMÜ Harf Notu</th>
-                                        </tr>
-                                    </thead>
+                                    <div style={detailGrid}>
+                                        <div style={infoCard}>
+                                            <h4>Öğrenci Bilgileri</h4>
+                                            <p><b>Ad Soyad:</b> {selectedApplication.application.studentname}</p>
+                                            <p><b>Öğrenci No:</b> {selectedApplication.application.studentno}</p>
+                                            <p><b>Fakülte:</b> {selectedApplication.application.faculty}</p>
+                                            <p><b>Bölüm:</b> {selectedApplication.application.department}</p>
+                                        </div>
 
-                                    <tbody>
-                                        {selectedApplication.mappings?.map((m, index) => (
-                                            <tr key={index}>
-                                                <td style={tdStyle}>
-                                                    {m.externalCourses?.map((c, i) => (
-                                                        <div key={i} style={innerRow}>
-                                                            {c.code} - {c.name}
-                                                        </div>
-                                                    ))}
-                                                </td>
+                                        <div style={infoCard}>
+                                            <h4>Başvuru Bilgileri</h4>
+                                            <p><b>Gerekçe:</b> {selectedApplication.application.exemptionreason || '-'}</p>
+                                            <p><b>Durum:</b> {selectedApplication.application.status || '-'}</p>
+                                            <p><b>Akademik Yıl:</b> {selectedApplication.application.academicyear || '-'}</p>
+                                            <p><b>Yarıyıl:</b> {selectedApplication.application.semester || '-'}</p>
+                                        </div>
+                                    </div>
 
-                                                <td style={tdStyle}>
-                                                    {m.externalCourses?.map((c, i) => (
-                                                        <div key={i} style={innerRow}>
-                                                            {c.akts}
-                                                        </div>
-                                                    ))}
-                                                </td>
+                                    <h4>Süreç Takibi</h4>
+                                    <div style={processBox}>
+                                        <div>✓ Başvuru Oluşturuldu</div>
+                                        <div>✓ Bölüme Yönlendirildi</div>
+                                        <div>✓ Komisyon İncelemesi</div>
+                                        <div
+                                            style={{
+                                                color: selectedApplication.application.status?.includes('Sonuçlandı')
+                                                    ? '#198754'
+                                                    : '#856404',
+                                                fontWeight: 'bold'
+                                            }}
+                                        >
+                                            {selectedApplication.application.status || 'Süreç devam ediyor'}
+                                        </div>
+                                    </div>
 
-                                                <td style={tdStyle}>
-                                                    {m.externalCourses?.map((c, i) => (
-                                                        <div key={i} style={innerRow}>
-                                                            {c.grade}
-                                                        </div>
-                                                    ))}
-                                                </td>
+                                    <h4>Yüklenen Belgeler</h4>
+                                    {selectedApplication.attachments?.length === 0 ? (
+                                        <p>Belge yok.</p>
+                                    ) : (
+                                        <div style={{ marginBottom: '15px' }}>
+                                            {selectedApplication.attachments.map(file => (
+                                                <button
+                                                    key={file.attachmentid}
+                                                    style={smallButton}
+                                                    onClick={() => {
+                                                        const fileUrl = `http://localhost:5000/${file.filepath.replaceAll('\\', '/')}`;
+                                                        window.open(getUploadedFileUrl(file.filepath), '_blank');
+                                                    }}
+                                                >
+                                                    {file.filetype} Görüntüle
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
 
-                                                <td style={tdStyle}>
-                                                    {m.targetCourse?.coursecode
-                                                        ? `${m.targetCourse.coursecode} - ${m.targetCourse.coursename}`
-                                                        : '-'}
-                                                </td>
-
-                                                <td style={tdStyle}>{m.targetCourse?.akts || '-'}</td>
-                                                <td style={tdStyle}>{m.finalGrade || '-'}</td>
+                                    <h4>Ders Eşleştirmeleri</h4>
+                                    <table style={tableStyle}>
+                                        <thead>
+                                            <tr>
+                                                <th style={thStyle}>Kaynak Ders</th>
+                                                <th style={thStyle}>Kaynak AKTS</th>
+                                                <th style={thStyle}>Harf Notu</th>
+                                                <th style={thStyle}>Hedef OMÜ Dersi</th>
+                                                <th style={thStyle}>OMÜ AKTS</th>
+                                                <th style={thStyle}>OMÜ Harf Notu</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                        </thead>
 
-                                <div style={adminNoteBox}>
-                                    Bu ekran yalnızca başvuru sürecini izlemek içindir. Ders eşleştirme, not ve akademik karar düzenlemeleri bölüm yetkilisi tarafından yapılır.
+                                        <tbody>
+                                            {selectedApplication.mappings?.map((m, index) => (
+                                                <tr key={index}>
+                                                    <td style={tdStyle}>
+                                                        {m.externalCourses?.map((c, i) => (
+                                                            <div key={i} style={innerRow}>
+                                                                {c.code} - {c.name}
+                                                            </div>
+                                                        ))}
+                                                    </td>
+
+                                                    <td style={tdStyle}>
+                                                        {m.externalCourses?.map((c, i) => (
+                                                            <div key={i} style={innerRow}>
+                                                                {c.akts}
+                                                            </div>
+                                                        ))}
+                                                    </td>
+
+                                                    <td style={tdStyle}>
+                                                        {m.externalCourses?.map((c, i) => (
+                                                            <div key={i} style={innerRow}>
+                                                                {c.grade}
+                                                            </div>
+                                                        ))}
+                                                    </td>
+
+                                                    <td style={tdStyle}>
+                                                        {m.targetCourse?.coursecode
+                                                            ? `${m.targetCourse.coursecode} - ${m.targetCourse.coursename}`
+                                                            : '-'}
+                                                    </td>
+
+                                                    <td style={tdStyle}>{m.targetCourse?.akts || '-'}</td>
+                                                    <td style={tdStyle}>{m.finalGrade || '-'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+
+                                    {adminWarnings.length > 0 && (
+                                        <div style={{
+                                            marginTop: '15px',
+                                            padding: '12px',
+                                            background: '#fff3cd',
+                                            border: '1px solid #ffecb5',
+                                            borderRadius: '6px',
+                                            color: '#664d03'
+                                        }}>
+                                            <strong>Sistem Uyarıları</strong>
+                                            <ul style={{ marginBottom: 0 }}>
+                                                {adminWarnings.map((warning, index) => (
+                                                    <li key={index}>{warning}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    <div style={adminNoteBox}>
+                                        Bu ekran yalnızca başvuru sürecini izlemek içindir. Ders eşleştirme, not ve akademik karar düzenlemeleri bölüm yetkilisi tarafından yapılır.
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })()}
 
-                        <table style={tableStyle}>
+                        < table style={tableStyle}>
                             <thead>
                                 <tr>
                                     <th style={thStyle}>Başvuru No</th>
@@ -1289,20 +1414,35 @@ const AdminDashboard = () => {
                                         <td style={tdStyle}>{app.exemptionreason}</td>
                                         <td style={tdStyle}>{app.status}</td>
                                         <td style={tdStyle}>
+                                            {app.status !== 'Taslak' && (
+                                                <button
+                                                    onClick={() =>
+                                                        setAssignForm({
+                                                            applicationId: app.applicationid,
+                                                            faculty: app.faculty || '',
+                                                            department: app.department || ''
+                                                        })
+                                                    }
+                                                    style={smallButton}
+                                                >
+                                                    {app.department
+                                                        ? 'Yönlendirmeyi Güncelle'
+                                                        : 'Bölüme Yönlendir'}
+                                                </button>
+                                            )}
+
                                             <button
-                                                onClick={() =>
-                                                    setAssignForm({
-                                                        applicationId: app.applicationid,
-                                                        faculty: app.faculty || '',
-                                                        department: app.department || ''
-                                                    })
-                                                }
+                                                onClick={() => openApplicationDetail(app.applicationid)}
                                                 style={smallButton}
                                             >
-                                                {app.department ? 'Yönlendirmeyi Güncelle' : 'Bölüme Yönlendir'}
-                                            </button>
-                                            <button onClick={() => openApplicationDetail(app.applicationid)} style={smallButton}>
                                                 Detay Gör
+                                            </button>
+
+                                            <button
+                                                onClick={() => deleteApplication(app.applicationid)}
+                                                style={dangerButton}
+                                            >
+                                                Sil
                                             </button>
                                         </td>
                                     </tr>
@@ -1312,7 +1452,7 @@ const AdminDashboard = () => {
                     </div>
                 )}
             </div>
-        </div>
+        </div >
     );
 };
 

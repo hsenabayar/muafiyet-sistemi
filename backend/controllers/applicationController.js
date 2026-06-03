@@ -228,49 +228,16 @@ exports.finalizeDecision = async (req, res) => {
     const { decisionId, isApproved, finalGrade, reviewNote } = req.body;
 
     try {
-        const decisionResult = await db.query(
-            `SELECT ApplicationID
-             FROM ExemptionDecisions
-             WHERE DecisionID = $1`,
-            [decisionId]
-        );
-
-        if (decisionResult.rows.length === 0) {
-            return res.status(404).json({
-                status: "error",
-                message: "Karar kaydı bulunamadı."
-            });
-        }
-
-        const applicationId = decisionResult.rows[0].applicationid;
-
         await db.query(
             `UPDATE ExemptionDecisions 
-             SET IsApproved = $1,
-                 FinalGrade = $2,
-                 ReviewNote = $3,
-                 ReviewDate = NOW()
+             SET IsApproved = $1, FinalGrade = $2, ReviewNote = $3, ReviewDate = NOW()
              WHERE DecisionID = $4`,
             [isApproved, finalGrade, reviewNote, decisionId]
         );
 
-        await db.query(
-            `UPDATE Applications
-             SET Status = 'Başvuru Sonuçlandı: Olumlu'
-             WHERE ApplicationID = $1`,
-            [applicationId]
-        );
-
-        res.json({
-            status: "success",
-            message: "Karar başarıyla kaydedildi."
-        });
-
+        res.json({ status: "success", message: "Karar başarıyla kaydedildi." });
     } catch (err) {
-        res.status(500).json({
-            status: "error",
-            message: err.message
-        });
+        res.status(500).json({ status: "error", message: err.message });
     }
 };
 
@@ -734,6 +701,8 @@ exports.getMyLatestApplication = async (req, res) => {
                 c.CourseName,
                 c.LocalCredit,
                 c.AKTS,
+                c.PrerequisiteCode,
+                c.CourseType,
                 ed.SuggestedGrade,
                 ed.FinalGrade,
                 ed.IsApproved,
@@ -781,7 +750,9 @@ exports.getMyLatestApplication = async (req, res) => {
                     coursecode: decision.coursecode,
                     coursename: decision.coursename,
                     localcredit: decision.localcredit,
-                    akts: decision.akts
+                    akts: decision.akts,
+                    prerequisitecode: decision.prerequisitecode,
+                    coursetype: decision.coursetype
                 },
                 suggestedGrade: decision.suggestedgrade,
                 finalGrade: decision.finalgrade,
@@ -839,13 +810,56 @@ exports.uploadDocuments = async (req, res) => {
 
                 await db.query(
                     `INSERT INTO Attachments 
+                    (ApplicationID, FileType, FileName, FilePath)
+                    VALUES ($1, $2, $3, $4)`,
+                    [
+                        applicationId,
+                        item.type,
+                        file.originalname,
+                        file.path
+                    ]
+                );
+            }
+        }
+
+        res.json({
+            status: "success",
+            message: "Belgeler başarıyla yüklendi."
+        });
+
+    } catch (err) {
+        res.status(500).json({
+            status: "error",
+            message: err.message
+        });
+    }
+};
+
+exports.uploadDocuments = async (req, res) => {
+    const { applicationId } = req.body;
+
+    try {
+        const files = req.files;
+
+        const fileList = [
+            { field: 'transcript', type: 'Transkript' },
+            { field: 'curriculum', type: 'Müfredat ve Ders İçerikleri' },
+            { field: 'internship', type: 'Staj Belgesi' }
+        ];
+
+        for (const item of fileList) {
+            if (files[item.field]) {
+                const file = files[item.field][0];
+
+                await db.query(
+                    `INSERT INTO Attachments 
     (ApplicationID, FileType, FileName, FilePath)
     VALUES ($1, $2, $3, $4)`,
                     [
                         applicationId,
                         item.type,
                         Buffer.from(file.originalname, 'latin1').toString('utf8'),
-                        `uploads/${file.filename}`
+                        file.path
                     ]
                 );
             }
@@ -858,9 +872,9 @@ exports.uploadDocuments = async (req, res) => {
 };
 
 exports.getApplicationsForCommission = async (req, res) => {
-    try {
-        const userId = req.user.id || req.user.userid || req.user.userId;
+    const userId = req.user.id;
 
+    try {
         const userResult = await db.query(
             `SELECT Faculty, Department, Role
              FROM Users
@@ -875,30 +889,11 @@ exports.getApplicationsForCommission = async (req, res) => {
             });
         }
 
-        const currentUser = userResult.rows[0];
+        const user = userResult.rows[0];
 
         let result;
 
-        // Öğrenci işleri isterse tüm başvuruları görebilir
-        if (currentUser.role === 'commission') {
-            result = await db.query(
-                `SELECT 
-                    ApplicationID,
-                    StudentNo,
-                    StudentName,
-                    Faculty,
-                    Department,
-                    Program,
-                    AcademicYear,
-                    Semester,
-                    ExemptionReason,
-                    SourceUniversity,
-                    Status
-                 FROM Applications
-                 ORDER BY ApplicationID DESC`
-            );
-        } else {
-            // Bölüm yetkilisi sadece kendi fakülte/bölüm başvurularını görür
+        if (user.role === 'teacher') {
             result = await db.query(
                 `SELECT 
                     ApplicationID,
@@ -914,9 +909,28 @@ exports.getApplicationsForCommission = async (req, res) => {
                     Status
                  FROM Applications
                  WHERE Faculty = $1
-                 AND Department = $2
+                   AND Department = $2
+                   AND Status <> 'Taslak'
                  ORDER BY ApplicationID DESC`,
-                [currentUser.faculty, currentUser.department]
+                [user.faculty, user.department]
+            );
+        } else {
+            result = await db.query(
+                `SELECT 
+                    ApplicationID,
+                    StudentNo,
+                    StudentName,
+                    Faculty,
+                    Department,
+                    Program,
+                    AcademicYear,
+                    Semester,
+                    ExemptionReason,
+                    SourceUniversity,
+                    Status
+                 FROM Applications
+                 WHERE Status <> 'Taslak'
+                 ORDER BY ApplicationID DESC`
             );
         }
 
@@ -961,6 +975,8 @@ exports.getApplicationDetailForCommission = async (req, res) => {
                 c.CourseName,
                 c.LocalCredit,
                 c.AKTS,
+                c.PrerequisiteCode,
+                c.CourseType,
                 ed.SuggestedGrade,
                 ed.FinalGrade,
                 ed.IsApproved,
@@ -1016,7 +1032,9 @@ exports.getApplicationDetailForCommission = async (req, res) => {
                     coursecode: decision.coursecode,
                     coursename: decision.coursename,
                     localcredit: decision.localcredit,
-                    akts: decision.akts
+                    akts: decision.akts,
+                    prerequisitecode: decision.prerequisitecode,
+                    coursetype: decision.coursetype
                 },
                 suggestedGrade: decision.suggestedgrade,
                 finalGrade: decision.finalgrade,
@@ -1938,6 +1956,8 @@ exports.getApplicationDetailForAdmin = async (req, res) => {
                 c.CourseName,
                 c.LocalCredit,
                 c.AKTS,
+                c.PrerequisiteCode,
+                c.CourseType,
                 ed.SuggestedGrade,
                 ed.FinalGrade,
                 ed.IsApproved,
@@ -1991,7 +2011,9 @@ exports.getApplicationDetailForAdmin = async (req, res) => {
                     coursecode: decision.coursecode,
                     coursename: decision.coursename,
                     localcredit: decision.localcredit,
-                    akts: decision.akts
+                    akts: decision.akts,
+                    prerequisitecode: decision.prerequisitecode,
+                    coursetype: decision.coursetype
                 },
                 suggestedGrade: decision.suggestedgrade,
                 finalGrade: decision.finalgrade,
@@ -2087,6 +2109,221 @@ exports.deleteDepartmentSetting = async (req, res) => {
         console.error(err);
         res.status(500).json({
             status: 'error',
+            message: err.message
+        });
+    }
+};
+
+exports.deleteApplication = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const decisions = await db.query(
+            `SELECT DecisionID
+             FROM ExemptionDecisions
+             WHERE ApplicationID = $1`,
+            [id]
+        );
+
+        for (const row of decisions.rows) {
+            await db.query(
+                `DELETE FROM DecisionDetails
+                 WHERE DecisionID = $1`,
+                [row.decisionid]
+            );
+        }
+
+        await db.query(
+            `DELETE FROM ExternalCourses
+             WHERE ApplicationID = $1`,
+            [id]
+        );
+
+        await db.query(
+            `DELETE FROM ExemptionDecisions
+             WHERE ApplicationID = $1`,
+            [id]
+        );
+
+        await db.query(
+            `DELETE FROM Attachments
+             WHERE ApplicationID = $1`,
+            [id]
+        );
+
+        await db.query(
+            `DELETE FROM Applications
+             WHERE ApplicationID = $1`,
+            [id]
+        );
+
+        res.json({
+            status: "success",
+            message: "Başvuru silindi."
+        });
+
+    } catch (err) {
+        console.error("Başvuru silme hatası:", err);
+        res.status(500).json({
+            status: "error",
+            message: err.message
+        });
+    }
+};
+
+exports.saveDraftApplication = async (req, res) => {
+    const {
+        applicationId,
+        academicYear,
+        semester,
+        exemptionReason,
+        sourceUniversity,
+        sourceFaculty,
+        sourceDepartment,
+        intakeNote,
+        studentNo,
+        studentName,
+        tcNo,
+        faculty,
+        department,
+        program,
+        mappings
+    } = req.body;
+
+    const userId = req.user.id || req.user.userid || req.user.userId;
+
+    try {
+        let appId = applicationId;
+
+        if (appId) {
+            await db.query(
+                `UPDATE Applications
+                 SET AcademicYear = $1,
+                     Semester = $2,
+                     ExemptionReason = $3,
+                     SourceUniversity = $4,
+                     SourceFaculty = $5,
+                     SourceDepartment = $6,
+                     IntakeNote = $7,
+                     Status = 'Taslak'
+                 WHERE ApplicationID = $8 AND UserID = $9`,
+                [
+                    academicYear,
+                    semester,
+                    exemptionReason,
+                    sourceUniversity,
+                    sourceFaculty,
+                    sourceDepartment,
+                    intakeNote,
+                    appId,
+                    userId
+                ]
+            );
+
+            const oldDecisions = await db.query(
+                `SELECT DecisionID FROM ExemptionDecisions WHERE ApplicationID = $1`,
+                [appId]
+            );
+
+            for (const row of oldDecisions.rows) {
+                await db.query(
+                    `DELETE FROM DecisionDetails WHERE DecisionID = $1`,
+                    [row.decisionid]
+                );
+            }
+
+            await db.query(`DELETE FROM ExemptionDecisions WHERE ApplicationID = $1`, [appId]);
+            await db.query(`DELETE FROM ExternalCourses WHERE ApplicationID = $1`, [appId]);
+        } else {
+            const appResult = await db.query(
+                `INSERT INTO Applications
+                 (UserID, StudentNo, StudentName, TCNo, Faculty, Department, Program,
+                  AcademicYear, Semester, ExemptionReason, SourceUniversity,
+                  SourceFaculty, SourceDepartment, IntakeNote, Status)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'Taslak')
+                 RETURNING ApplicationID`,
+                [
+                    userId,
+                    studentNo,
+                    studentName,
+                    tcNo,
+                    faculty,
+                    department,
+                    program,
+                    academicYear,
+                    semester,
+                    exemptionReason,
+                    sourceUniversity,
+                    sourceFaculty,
+                    sourceDepartment,
+                    intakeNote
+                ]
+            );
+
+            appId = appResult.rows[0].applicationid;
+        }
+
+        for (const mapping of mappings || []) {
+            const targetCourseId = mapping.targetCourseId || mapping.targetCourse?.courseid;
+            if (!targetCourseId) continue;
+
+            let totalWeightedScore = 0;
+            let totalSourceAKTS = 0;
+
+            for (const course of mapping.externalCourses || []) {
+                const gradeValue = course.numericGrade || getGradeValue(course.grade);
+                totalWeightedScore += gradeValue * Number(course.akts || 0);
+                totalSourceAKTS += Number(course.akts || 0);
+            }
+
+            const calculatedAverage = totalSourceAKTS > 0 ? totalWeightedScore / totalSourceAKTS : 0;
+            const suggestedGrade = getSuggestedGrade(calculatedAverage);
+
+            const decision = await db.query(
+                `INSERT INTO ExemptionDecisions
+                 (ApplicationID, TargetCourseID, IsApproved, SuggestedGrade, CalculatedScore)
+                 VALUES ($1, $2, NULL, $3, $4)
+                 RETURNING DecisionID`,
+                [appId, targetCourseId, suggestedGrade, calculatedAverage.toFixed(2)]
+            );
+
+            const decisionId = decision.rows[0].decisionid;
+
+            for (const course of mapping.externalCourses || []) {
+                const extRes = await db.query(
+                    `INSERT INTO ExternalCourses
+                     (ApplicationID, CourseCode, CourseName, Grade, SourceAKTS, NumericGrade, SourceCredit)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7)
+                     RETURNING ExtCourseID`,
+                    [
+                        appId,
+                        course.code,
+                        course.name,
+                        course.grade,
+                        Number(course.akts || 0),
+                        course.numericGrade || getGradeValue(course.grade),
+                        course.sourceCredit ? Number(course.sourceCredit) : null
+                    ]
+                );
+
+                await db.query(
+                    `INSERT INTO DecisionDetails (DecisionID, ExtCourseID)
+                     VALUES ($1, $2)`,
+                    [decisionId, extRes.rows[0].extcourseid]
+                );
+            }
+        }
+
+        res.json({
+            status: "success",
+            applicationId: appId,
+            message: "Taslak kaydedildi."
+        });
+
+    } catch (err) {
+        console.error("Taslak kaydetme hatası:", err);
+        res.status(500).json({
+            status: "error",
             message: err.message
         });
     }
